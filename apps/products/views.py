@@ -72,7 +72,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if not user or not user.is_authenticated:
-            return Product.objects.all()
+            return Product.objects.filter(seller__status="approved")
             
         if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
             return Product.objects.all()
@@ -80,7 +80,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         if hasattr(user, 'role') and user.role == 'seller':
             return Product.objects.filter(seller__user=user)
             
-        return Product.objects.all()
+        return Product.objects.filter(seller__status="approved")
 
     def invalidate_product_cache(self, product):
         cache.delete('products_list_all')
@@ -125,7 +125,7 @@ class CartView(APIView):
                     "product_id": product_id,
                     "name": product.name,
                     "price": str(product.price),
-                    "image": product.image.url if product.image else None,
+                    "image": request.build_absolute_uri(product.image.url) if product.image else None,
                     "sku": product.sku,
                     "quantity": quantity,
                     "seller_shop": product.seller.shop_name if product.seller else "Platform Store"

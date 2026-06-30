@@ -9,6 +9,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.conf import settings
 from django.core.cache import cache
 from .models.user import UserProfile
+from seller.models import SellerProfile
 
 User = get_user_model()
 
@@ -21,6 +22,14 @@ def invalidate_user_cache(sender, instance, **kwargs):
 
 @receiver([post_save, post_delete], sender=UserProfile)
 def invalidate_user_profile_cache(sender, instance, **kwargs):
+    # Invalidate global list cache
+    cache.delete('users_list_cache')
+    # Invalidate individual profile cache
+    if instance.user:
+        cache.delete(f"user_profile_cache_{instance.user.id}")
+
+@receiver([post_save, post_delete], sender=SellerProfile)
+def invalidate_seller_profile_cache(sender, instance, **kwargs):
     # Invalidate global list cache
     cache.delete('users_list_cache')
     # Invalidate individual profile cache

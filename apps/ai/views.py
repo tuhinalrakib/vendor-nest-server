@@ -389,12 +389,22 @@ class AIChatSupportView(APIView):
         if not message:
             return Response({"error": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-        catalog = [
-            {"name": "Wireless ANC Headphones Pro", "price": "$129.99", "features": "Active Noise Cancelling, 40hr Battery"},
-            {"name": "Ergonomic Office Chair Leather", "price": "$249.50", "features": "Lumbar support, genuine leather, adjustable armrests"},
-            {"name": "Minimalist Water Bottle 1L", "price": "$24.99", "features": "Vacuum insulated, stainless steel, keeps cold for 24h"},
-            {"name": "USB-C Multi-port Hub 8-in-1", "price": "$49.99", "features": "4K HDMI, SD Reader, 100W Power Delivery"},
-        ]
+        db_products = list(Product.objects.all()[:10])
+        catalog = []
+        for p in db_products:
+            catalog.append({
+                "name": p.name,
+                "price": f"${p.price}",
+                "features": p.description or "Quality product listed on VendorNest store"
+            })
+
+        if not catalog:
+            catalog = [
+                {"name": "Wireless ANC Headphones Pro", "price": "$129.99", "features": "Active Noise Cancelling, 40hr Battery"},
+                {"name": "Ergonomic Office Chair Leather", "price": "$249.50", "features": "Lumbar support, genuine leather, adjustable armrests"},
+                {"name": "Minimalist Water Bottle 1L", "price": "$24.99", "features": "Vacuum insulated, stainless steel, keeps cold for 24h"},
+                {"name": "USB-C Multi-port Hub 8-in-1", "price": "$49.99", "features": "4K HDMI, SD Reader, 100W Power Delivery"},
+            ]
 
         formatted_history = ""
         for h in history:
@@ -412,16 +422,20 @@ class AIChatSupportView(APIView):
         if not has_gemini or not api_key:
             answer = "I'd be glad to help! "
             m_lower = message.lower()
-            if "headphone" in m_lower or "sound" in m_lower:
-                answer += "Our Wireless ANC Headphones Pro ($129.99) offer active noise cancelling and an incredible 40-hour battery life. They are perfect for travel or focused work."
-            elif "chair" in m_lower or "seating" in m_lower:
-                answer += "The Ergonomic Office Chair Leather ($249.50) is highly adjustable with premium lumbar support and genuine leather upholstery, designed for long work hours."
-            elif "water" in m_lower or "bottle" in m_lower:
-                answer += "The Minimalist Water Bottle 1L ($24.99) keeps drinks ice-cold for up to 24 hours thanks to its double-walled vacuum insulation."
-            elif "hub" in m_lower or "usb" in m_lower:
-                answer += "Our USB-C Multi-port Hub 8-in-1 ($49.99) includes 4K HDMI support, SD card reader, and 100W power delivery output."
+            
+            # Look for keyword match in the database product list
+            matched_product = None
+            for item in catalog:
+                name_words = [w.lower() for w in item["name"].split() if len(w) > 3]
+                if item["name"].lower() in m_lower or any(word in m_lower for word in name_words):
+                    matched_product = item
+                    break
+            
+            if matched_product:
+                answer += f"Our {matched_product['name']} ({matched_product['price']}) is a great choice. Details: {matched_product['features']}."
             else:
-                answer += "We have several amazing products in our store, including Ergonomic Chairs, ANC Headphones, Insulated Water Bottles, and USB-C Hubs. Let me know if you would like pricing or detail information about any of these!"
+                product_names = [item["name"] for item in catalog[:4]]
+                answer += f"We have several amazing products in our store, including {', '.join(product_names)}. Let me know if you would like pricing or detail information about any of these!"
             
             return Response({"reply": answer})
 
