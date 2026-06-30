@@ -177,3 +177,42 @@ class CartView(APIView):
             "cart_count": total_items
         })
 
+    def put(self, request):
+        user_id = str(request.user.id)
+        cart_key = f"cart_{user_id}"
+        product_id = request.data.get("product_id")
+        quantity = request.data.get("quantity")
+
+        if not product_id:
+            return Response({"error": "product_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity is None:
+            return Response({"error": "quantity is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            quantity = int(quantity)
+            if quantity < 0:
+                raise ValueError()
+        except ValueError:
+            return Response({"error": "quantity must be a non-negative integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get existing cart
+        cart_items = cache.get(cart_key, {})
+
+        if quantity == 0:
+            if product_id in cart_items:
+                del cart_items[product_id]
+        else:
+            try:
+                product = Product.objects.get(id=product_id)
+            except Product.DoesNotExist:
+                return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
+            cart_items[product_id] = quantity
+
+        cache.set(cart_key, cart_items, 86400 * 30)
+
+        total_items = sum(cart_items.values())
+        return Response({
+            "message": "Cart updated successfully",
+            "cart_count": total_items
+        })
+
