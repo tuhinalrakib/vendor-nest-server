@@ -1,0 +1,36 @@
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
+
+# Ignore database files
+# db.sqlite3
+
+# Ignore development server files
+*.log
+*.pot
+*.pyc
+
+# Ignore static files
+# static_root/
+
+# Ignore secret settings file
+secrets.json
+
+# Ignore environment-specific settings
+.env
+pyproject.toml
+sample.env
+
+# Ignore IDE and code editor settings (customize as needed)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+
+# Ignore dependency management files (customize as needed)
+venv/
+nginx/
+certbot/
+.DS_Store
+
+config/media/
