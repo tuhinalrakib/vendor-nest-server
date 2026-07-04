@@ -19,16 +19,16 @@ from seller.models import SellerProfile
 api_key = os.getenv("GEMINI_API_KEY")
 
 # Startup Diagnostics
-print("\n--- [VendorNest AI Diagnostics] ---")
-print(f"google-generativeai installed: {has_gemini}")
-print(f"GEMINI_API_KEY loaded:        {'Yes (Starts with ' + api_key[:8] + '...)' if api_key else 'No (None or Empty)'}")
+# print("\n--- [VendorNest AI Diagnostics] ---")
+# print(f"google-generativeai installed: {has_gemini}")
+# print(f"GEMINI_API_KEY loaded:        {'Yes (Starts with ' + api_key[:8] + '...)' if api_key else 'No (None or Empty)'}")
 
 supported_models = []
 if has_gemini and api_key:
     try:
         genai.configure(api_key=api_key)
         supported_models = [m.name.replace("models/", "") for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-        print(f"Available models:             {supported_models}")
+        # print(f"Available models:             {supported_models}")
     except Exception as e:
         print(f"Failed to list models:        {e}")
 print("-----------------------------------\n")

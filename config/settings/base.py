@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'seller',
     'shipping',
     'users',
+    'coupons',
     
     'rest_framework',
 ]
@@ -218,13 +219,17 @@ DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@vendornest.com')
 # Caching Configuration (Redis with LocMemCache fallback for local dev)
 REDIS_URL = os.getenv('REDIS_URL')
 if REDIS_URL:
+    _is_ssl = REDIS_URL.startswith('rediss://')
     CACHES = {
         'default': {
             'BACKEND': 'django.core.cache.backends.redis.RedisCache',
             'LOCATION': REDIS_URL,
             'OPTIONS': {
-                'socket_timeout': 10.0,
-                'socket_connect_timeout': 10.0,
+                'socket_timeout': 30.0,
+                'socket_connect_timeout': 30.0,
+                'health_check_interval': 30,
+                # Redis Cloud uses SSL — skip cert verification for dev
+                **({'ssl_cert_reqs': None} if _is_ssl else {}),
             }
         }
     }
@@ -235,3 +240,5 @@ else:
             'LOCATION': 'vendor-nest-local-cache',
         }
     }
+
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', 'sk_test_mock_secret_key')

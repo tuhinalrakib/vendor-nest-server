@@ -128,7 +128,8 @@ class CartView(APIView):
                     "image": request.build_absolute_uri(product.image.url) if product.image else None,
                     "sku": product.sku,
                     "quantity": quantity,
-                    "seller_shop": product.seller.shop_name if product.seller else "Platform Store"
+                    "seller_shop": product.seller.shop_name if product.seller else "Platform Store",
+                    "seller_id": str(product.seller.id) if product.seller else None
                 })
             except Product.DoesNotExist:
                 continue
@@ -165,6 +166,13 @@ class CartView(APIView):
         user_id = str(request.user.id)
         cart_key = f"cart_{user_id}"
         product_id = request.data.get("product_id")
+
+        if not product_id:
+            cache.set(cart_key, {}, 86400 * 30)
+            return Response({
+                "message": "Cart cleared successfully",
+                "cart_count": 0
+            })
 
         cart_items = cache.get(cart_key, {})
         if product_id in cart_items:
