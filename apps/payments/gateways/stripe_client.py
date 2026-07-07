@@ -48,7 +48,7 @@ class StripeSandboxClient:
                 logger.error(f"Failed to create real Stripe Checkout Session via urllib: {e}")
                 
         tx_id = f"cs_mock_{uuid.uuid4().hex[:16]}"
-        checkout_url = f"http://127.0.0.1:8000/api/payments/stripe/verify/?session_id={tx_id}&order_id={order_id}&status=success"
+        checkout_url = f"{settings.BACKEND_URL}/api/payments/stripe/verify/?session_id={tx_id}&order_id={order_id}&status=success"
         logger.info(f"Simulating Stripe Checkout Session in Sandbox Mode. Order: {order_id}, Amount: {amount}")
         
         return {

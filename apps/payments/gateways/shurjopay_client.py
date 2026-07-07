@@ -1,5 +1,6 @@
 import uuid
 import logging
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class ShurjopaySandboxClient:
         tx_id = f"sp_mock_tx_{uuid.uuid4().hex[:16]}"
         # Mocking the Shurjopay hosted checkout redirect URL
         # For simplicity, we redirect the client back to our callback endpoint with success parameters
-        checkout_url = f"http://127.0.0.1:8000/api/payments/shurjopay/callback/?sp_tx_id={tx_id}&status=success"
+        checkout_url = f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/?sp_tx_id={tx_id}&status=success"
         logger.info(f"Simulating Shurjopay payment initiation. Amount: {amount}")
         return {
             "checkout_url": checkout_url,

@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import views, viewsets, permissions, status
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404, redirect
@@ -26,8 +27,8 @@ class StripeCheckoutSessionView(views.APIView):
         
         order = get_object_or_404(Order, id=order_id)
         
-        success_url = f"http://127.0.0.1:8000/api/payments/stripe/verify/?session_id={{CHECKOUT_SESSION_ID}}&order_id={order_id}&status=success"
-        cancel_url = f"http://127.0.0.1:8000/api/payments/stripe/verify/?status=cancel"
+        success_url = f"{settings.BACKEND_URL}/api/payments/stripe/verify/?session_id={{CHECKOUT_SESSION_ID}}&order_id={order_id}&status=success"
+        cancel_url = f"{settings.BACKEND_URL}/api/payments/stripe/verify/?status=cancel"
         
         session = StripeSandboxClient.create_checkout_session(
             order_id=order_id,
@@ -82,11 +83,11 @@ class StripeVerifyView(views.APIView):
                 order.status = "paid"
                 order.save()
                 
-                return redirect(f"http://localhost:3000/order-success?type=stripe&order_id={order.id}")
+                return redirect(f"{settings.FRONTEND_URL}/order-success?type=stripe&order_id={order.id}")
                 
         tx.status = "failed"
         tx.save()
-        return redirect("http://localhost:3000/checkout?checkout_success=false")
+        return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false")
 
 
 class ShurjopayInitiateView(views.APIView):
@@ -102,8 +103,8 @@ class ShurjopayInitiateView(views.APIView):
         # Initiate payment
         init_res = ShurjopaySandboxClient.initiate_payment(
             amount=str(order.total_amount),
-            return_url="http://127.0.0.1:8000/api/payments/shurjopay/callback/",
-            cancel_url="http://127.0.0.1:8000/api/payments/shurjopay/callback/?status=cancel"
+            return_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/",
+            cancel_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/?status=cancel"
         )
 
         # Create pending transaction
@@ -148,11 +149,11 @@ class ShurjopayCallbackView(views.APIView):
                 order.save()
                 
                 # Redirect back to the frontend success landing area
-                return redirect(f"http://localhost:3000/order-success?type=shurjopay&order_id={order.id}")
+                return redirect(f"{settings.FRONTEND_URL}/order-success?type=shurjopay&order_id={order.id}")
                 
         tx.status = "failed"
         tx.save()
-        return redirect("http://localhost:3000/checkout?checkout_success=false")
+        return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false")
 
 
 class CODPaymentView(views.APIView):

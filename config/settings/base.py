@@ -115,6 +115,11 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # Custom User Model
 AUTH_USER_MODEL = 'users.User'
 
+# URLs for Backend and Frontend
+BACKEND_URL = os.getenv('BACKEND_URL', 'http://127.0.0.1:8000')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+
 # Cloudinary Storage Configuration
 CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
 CLOUDINARY_API_KEY = os.getenv('CLOUDINARY_API_KEY')

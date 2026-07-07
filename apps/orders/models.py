@@ -65,6 +65,7 @@ class Order(BaseModel):
                     from django.conf import settings
                     
                     subject = f"Order Confirmed - VendorNest [Order #{self.id}]"
+                    frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
                     message = f"""Hello {self.buyer.username},
 
 Your order #{self.id} has been successfully confirmed. 
@@ -72,7 +73,7 @@ Total Amount: ${self.total_amount}
 Payment Method: {self.get_payment_method_display() if self.payment_method else self.get_status_display()}
 
 You can view your order details and download your Invoice PDF from your dashboard:
-http://localhost:3000/orders
+{frontend_url}/orders
 
 Thank you for shopping with VendorNest!
 """
