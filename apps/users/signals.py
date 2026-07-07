@@ -35,6 +35,7 @@ def invalidate_seller_profile_cache(sender, instance, **kwargs):
     # Invalidate individual profile cache
     if instance.user:
         cache.delete(f"user_profile_cache_{instance.user.id}")
+        cache.delete(f"seller_profile_cache_{instance.user.id}")
 
 
 @receiver(post_save, sender=User)

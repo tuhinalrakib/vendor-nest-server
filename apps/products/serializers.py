@@ -29,7 +29,23 @@ def parse_tags_for_extra_fields(tags_str):
             sizes = val.replace("|", ", ")
     return colors, sizes
 
+class HybridImageField(serializers.ImageField):
+    def to_internal_value(self, data):
+        if isinstance(data, str) and data.startswith(('http://', 'https://')):
+            return data
+        return super().to_internal_value(data)
+
+    def to_representation(self, value):
+        if not value:
+            return None
+        if isinstance(value, str) and value.startswith(('http://', 'https://')):
+            return value
+        if hasattr(value, 'name') and isinstance(value.name, str) and value.name.startswith(('http://', 'https://')):
+            return value.name
+        return super().to_representation(value)
+
 class ProductSerializer(serializers.ModelSerializer):
+    image = HybridImageField(required=False, allow_null=True)
     seller_shop = serializers.SerializerMethodField()
     color = serializers.CharField(required=False, allow_blank=True, default="")
     sizes = serializers.CharField(required=False, allow_blank=True, default="")

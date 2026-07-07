@@ -25,9 +25,18 @@ class Order(BaseModel):
     buyer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="orders")
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # Shipping Details
+    shipping_name = models.CharField(max_length=255, blank=True, null=True)
+    shipping_phone = models.CharField(max_length=20, blank=True, null=True)
+    shipping_address = models.CharField(max_length=255, blank=True, null=True)
+    shipping_city = models.CharField(max_length=100, blank=True, null=True)
+    shipping_zip = models.CharField(max_length=20, blank=True, null=True)
+    
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     stock_deducted = models.BooleanField(default=False)
     email_sent = models.BooleanField(default=False)
+    sms_sent = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         # We need to save the order first to ensure it has an ID and items can be accessed,
@@ -41,11 +50,13 @@ class Order(BaseModel):
             stock_updated = False
             
             if not self.stock_deducted:
-                for item in self.items.all():
-                    if item.product:
-                        item.product.stock = max(0, item.product.stock - item.quantity)
-                        item.product.save()
-                stock_updated = True
+                items = self.items.all()
+                if items.exists():
+                    for item in items:
+                        if item.product:
+                            item.product.stock = max(0, item.product.stock - item.quantity)
+                            item.product.save()
+                    stock_updated = True
                 
             email_updated = False
             if not self.email_sent:
@@ -70,17 +81,43 @@ Thank you for shopping with VendorNest!
                         message,
                         settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
                         [self.buyer.email],
-                        fail_silently=True,
+                        fail_silently=False,
                     )
                     email_updated = True
                 except Exception as e:
                     print(f"Failed to send order confirmation email: {e}")
+                    
+            sms_updated = False
+            if not self.sms_sent:
+                try:
+                    from twilio.rest import Client
+                    from django.conf import settings
+                    
+                    if hasattr(settings, 'TWILIO_ACCOUNT_SID') and settings.TWILIO_ACCOUNT_SID:
+                        phone_to_use = self.shipping_phone or self.buyer.phone_number
+                        if phone_to_use:
+                            client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+                            message_body = f"Hello {self.buyer.username}, Your order #{self.id} has been successfully confirmed. Total Amount: ${self.total_amount}. Thank you for shopping with VendorNest!"
+                            message = client.messages.create(
+                                body=message_body,
+                                from_=settings.TWILIO_PHONE_NUMBER,
+                                to=str(phone_to_use)
+                            )
+                            print(f"Twilio SMS sent: {message.sid}")
+                            sms_updated = True
+                        else:
+                            print(f"Order #{self.id} does not have a phone number. Skipping SMS.")
+                    else:
+                        print("Twilio settings are missing. Skipping SMS.")
+                except Exception as e:
+                    print(f"Failed to send order confirmation SMS: {e}")
             
             # Update tracked states without calling save() recursively
-            if stock_updated or email_updated:
+            if stock_updated or email_updated or sms_updated:
                 Order.objects.filter(pk=self.pk).update(
                     stock_deducted=True if stock_updated else self.stock_deducted,
-                    email_sent=True if email_updated else self.email_sent
+                    email_sent=True if email_updated else self.email_sent,
+                    sms_sent=True if sms_updated else self.sms_sent
                 )
 
     def __str__(self):

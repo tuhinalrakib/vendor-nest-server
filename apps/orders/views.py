@@ -9,9 +9,14 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        
+        if not user.is_authenticated:
+            return Order.objects.none()
+            
+        queryset = Order.objects.all().select_related('buyer').prefetch_related('items__product__seller', 'transactions')
         if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
-            return Order.objects.all()
-        return Order.objects.filter(buyer=user)
+            return queryset
+        return queryset.filter(buyer=user)
 
     def perform_create(self, serializer):
         serializer.save(buyer=self.request.user)

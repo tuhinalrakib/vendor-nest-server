@@ -15,37 +15,34 @@ class CategoryViewSet(viewsets.ModelViewSet):
     Restricts creating, updating, and deleting categories to platform admins.
     Caches the list output in Redis/Cache and invalidates it on write operations.
     """
-    queryset = Category.objects.all()
+    from django.db.models import Count
+    queryset = Category.objects.select_related('parent').annotate(product_count_annotated=Count('products')).all()
     serializer_class = CategorySerializer
     permission_classes = [IsAdminOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     lookup_field = 'id'
-
     def list(self, request, *args, **kwargs):
         cached_data = cache.get(CACHE_KEY_CATEGORIES_LIST)
         if cached_data is not None:
             return Response(cached_data)
 
-        # Query database if not cached
         queryset = self.filter_queryset(self.get_queryset())
         serializer = self.get_serializer(queryset, many=True)
         data = serializer.data
 
-        # Cache categories list for 24 hours (86400 seconds)
         cache.set(CACHE_KEY_CATEGORIES_LIST, data, 86400)
         return Response(data)
 
-    def perform_create(self, serializer):
-        serializer.save()
-        # Invalidate categories cache
-        cache.delete(CACHE_KEY_CATEGORIES_LIST)
+    def retrieve(self, request, *args, **kwargs):
+        category_id = kwargs.get('id')
+        if not category_id:
+            return super().retrieve(request, *args, **kwargs)
 
-    def perform_update(self, serializer):
-        serializer.save()
-        # Invalidate categories cache
-        cache.delete(CACHE_KEY_CATEGORIES_LIST)
+        cache_key = f"category_detail_{category_id}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
 
-    def perform_destroy(self, instance):
-        instance.delete()
-        # Invalidate categories cache
-        cache.delete(CACHE_KEY_CATEGORIES_LIST)
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, 86400)
+        return response

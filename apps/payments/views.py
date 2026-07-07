@@ -202,7 +202,7 @@ class PayoutSettingsView(views.APIView):
 
     def put(self, request):
         if not hasattr(request.user, "seller_profile"):
-            return Response({"error": "Only sellers possess payout configurations."}, status=status.HTTP_430_FORBIDDEN)
+            return Response({"error": "Only sellers possess payout configurations."}, status=status.HTTP_403_FORBIDDEN)
 
         settings_obj, _ = PayoutSettings.objects.get_or_create(seller=request.user.seller_profile)
         serializer = PayoutSettingsSerializer(settings_obj, data=request.data, partial=True)

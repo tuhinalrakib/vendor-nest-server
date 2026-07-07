@@ -2,6 +2,7 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
+from django.core.cache import cache
 from .models import Coupon
 from .serializers import CouponSerializer
 from seller.models import SellerProfile
@@ -32,6 +33,55 @@ class CouponViewSet(viewsets.ModelViewSet):
     queryset = Coupon.objects.all()
     serializer_class = CouponSerializer
     permission_classes = [IsAdminOrSellerOrReadOnly]
+
+    def get_list_cache_key(self, request):
+        import hashlib
+        import json
+
+        user = request.user
+        if not user or not user.is_authenticated:
+            base_key = 'coupons_list_public'
+        elif user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
+            base_key = 'coupons_list_admin'
+        elif hasattr(user, 'role') and user.role == 'seller':
+            base_key = f'coupons_list_seller_{user.id}'
+        else:
+            base_key = 'coupons_list_public'
+
+        # Hash query parameters to prevent key collisions
+        query_params = dict(request.query_params.items())
+        params_str = json.dumps(query_params, sort_keys=True)
+        params_hash = hashlib.md5(params_str.encode('utf-8')).hexdigest()
+
+        # Retrieve/initialize cache version for coupons
+        cache_version = cache.get_or_set("coupons_cache_version", 1)
+
+        return f"{base_key}_v{cache_version}_{params_hash}"
+
+    def list(self, request, *args, **kwargs):
+        cache_key = self.get_list_cache_key(request)
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        data = serializer.data
+
+        # Cache for 24 hours
+        cache.set(cache_key, data, 86400)
+        return Response(data)
+
+    def retrieve(self, request, *args, **kwargs):
+        coupon_id = kwargs.get('pk')
+        cache_key = f"coupon_detail_{coupon_id}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, 86400)  # Cache for 24 hours
+        return response
 
     def get_queryset(self):
         user = self.request.user
@@ -167,6 +217,7 @@ class CouponValidationView(APIView):
                 discount_amount = min(discount_amount, matching_subtotal)
                 # Deduct from seller subtotal so subsequent seller coupons (if any) apply on remaining
                 seller_subtotals[seller_id] -= discount_amount
+                total_subtotal -= discount_amount
 
             else:
                 # Admin / Global coupon

@@ -47,32 +47,16 @@ class ResendVerificationEmailView(APIView):
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(email=email)
-        except User.DoesNotExist:
-            return Response({"message": "If the email is registered, a new verification link has been sent."}, status=status.HTTP_200_OK)
-
-        if user.is_email_verified:
-            return Response({"error": "This email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Generate new token and send email
-        token = default_token_generator.make_token(user)
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
-        
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        activation_link = f"{frontend_url}/verify-email?uid={uid}&token={token}"
-        
-        subject = "Verify your email - VendorNest"
-        message = f"Hello {user.get_full_name()},\n\nPlease verify your email by clicking the link below:\n{activation_link}\n\nThank you!"
-        
-        try:
             send_mail(
-                subject,
-                message,
+                "Test email - VendorNest",
+                "This is a test email to verify Django SMTP settings.",
                 settings.DEFAULT_FROM_EMAIL,
-                [user.email],
+                [email],
                 fail_silently=False,
             )
-            return Response({"message": "Verification email has been resent successfully."}, status=status.HTTP_200_OK)
+            return Response({"message": f"Test email successfully sent to {email}"}, status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            import traceback
+            tb = traceback.format_exc()
+            return Response({"error": f"Failed to send email: {str(e)}", "traceback": tb}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

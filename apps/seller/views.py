@@ -1,5 +1,7 @@
 from rest_framework import generics, permissions
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
+from django.core.cache import cache
 from .models import SellerProfile
 from .serializers import SellerProfileSerializer
 
@@ -19,6 +21,16 @@ class SellerProfileView(generics.RetrieveUpdateAPIView):
         # Retrieve or create SellerProfile for the authenticated seller
         profile, created = SellerProfile.objects.get_or_create(user=user)
         return profile
+
+    def retrieve(self, request, *args, **kwargs):
+        cache_key = f"seller_profile_cache_{request.user.id}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, 86400)  # Cache for 24 hours
+        return response
 
 
 from rest_framework import viewsets

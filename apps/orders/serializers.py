@@ -17,7 +17,7 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'buyer', 'buyer_name', 'total_amount', 'status', 'items', 'payment_method', 'created_at']
+        fields = ['id', 'buyer', 'buyer_name', 'total_amount', 'status', 'items', 'payment_method', 'created_at', 'shipping_name', 'shipping_phone', 'shipping_address', 'shipping_city', 'shipping_zip']
         read_only_fields = ['id', 'buyer', 'buyer_name', 'status', 'created_at']
 
     def get_payment_method(self, obj):
@@ -33,11 +33,9 @@ class OrderSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         items_data = validated_data.pop('items')
         request = self.context.get('request')
-        buyer = request.user
+        buyer = validated_data.pop('buyer', request.user if request else None)
         
-        total_amount = validated_data.get('total_amount', 0)
-        
-        order = Order.objects.create(buyer=buyer, total_amount=total_amount)
+        order = Order.objects.create(buyer=buyer, **validated_data)
         for item_data in items_data:
             OrderItem.objects.create(order=order, **item_data)
         return order

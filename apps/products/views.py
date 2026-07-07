@@ -45,18 +45,32 @@ class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     permission_classes = [IsApprovedSellerOrReadOnly]
 
-    def get_cache_key(self, request):
+    def get_list_cache_key(self, request):
+        import hashlib
+        import json
+
         user = request.user
         if not user or not user.is_authenticated:
-            return 'products_list_all'
-        if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
-            return 'products_list_all'
-        if hasattr(user, 'role') and user.role == 'seller':
-            return f'products_list_seller_{user.id}'
-        return 'products_list_all'
+            base_key = 'products_list_all'
+        elif user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
+            base_key = 'products_list_all'
+        elif hasattr(user, 'role') and user.role == 'seller':
+            base_key = f'products_list_seller_{user.id}'
+        else:
+            base_key = 'products_list_all'
+
+        # Hash query parameters to prevent key collisions for different filters
+        query_params = dict(request.query_params.items())
+        params_str = json.dumps(query_params, sort_keys=True)
+        params_hash = hashlib.md5(params_str.encode('utf-8')).hexdigest()
+
+        # Retrieve/initialize cache version for products
+        cache_version = cache.get_or_set("products_cache_version", 1)
+
+        return f"{base_key}_v{cache_version}_{params_hash}"
 
     def list(self, request, *args, **kwargs):
-        cache_key = self.get_cache_key(request)
+        cache_key = self.get_list_cache_key(request)
         cached_data = cache.get(cache_key)
         if cached_data is not None:
             return Response(cached_data)
@@ -65,40 +79,34 @@ class ProductViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         data = serializer.data
 
-        # Cache for 24 hours
+        # Cache list for 24 hours
         cache.set(cache_key, data, 86400)
         return Response(data)
 
+    def retrieve(self, request, *args, **kwargs):
+        product_id = kwargs.get('pk')
+        cache_key = f"product_detail_{product_id}"
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().retrieve(request, *args, **kwargs)
+        cache.set(cache_key, response.data, 86400)  # Cache for 24 hours
+        return response
+
     def get_queryset(self):
         user = self.request.user
+        queryset = Product.objects.select_related('seller', 'category', 'seller__user')
         if not user or not user.is_authenticated:
-            return Product.objects.filter(seller__status="approved")
+            return queryset.filter(seller__status="approved")
             
         if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
-            return Product.objects.all()
+            return queryset.all()
             
         if hasattr(user, 'role') and user.role == 'seller':
-            return Product.objects.filter(seller__user=user)
+            return queryset.filter(seller__user=user)
             
-        return Product.objects.filter(seller__status="approved")
-
-    def invalidate_product_cache(self, product):
-        cache.delete('products_list_all')
-        if product and product.seller and product.seller.user:
-            cache.delete(f'products_list_seller_{product.seller.user.id}')
-
-    def perform_create(self, serializer):
-        product = serializer.save()
-        self.invalidate_product_cache(product)
-
-    def perform_update(self, serializer):
-        product = serializer.save()
-        self.invalidate_product_cache(product)
-
-    def perform_destroy(self, instance):
-        self.invalidate_product_cache(instance)
-        instance.delete()
-
+        return queryset.filter(seller__status="approved")
 
 from rest_framework.views import APIView
 from rest_framework import status
@@ -121,11 +129,20 @@ class CartView(APIView):
         for product_id, quantity in cart_items.items():
             try:
                 product = Product.objects.get(id=product_id)
+                image_url = None
+                if product.image:
+                    if isinstance(product.image.name, str) and product.image.name.startswith(('http://', 'https://')):
+                        image_url = product.image.name
+                    elif product.image.url.startswith(('http://', 'https://')):
+                        image_url = product.image.url
+                    else:
+                        image_url = request.build_absolute_uri(product.image.url)
+
                 result.append({
                     "product_id": product_id,
                     "name": product.name,
                     "price": str(product.price),
-                    "image": request.build_absolute_uri(product.image.url) if product.image else None,
+                    "image": image_url,
                     "sku": product.sku,
                     "quantity": quantity,
                     "seller_shop": product.seller.shop_name if product.seller else "Platform Store",
@@ -222,5 +239,32 @@ class CartView(APIView):
         return Response({
             "message": "Cart updated successfully",
             "cart_count": total_items
+        })
+
+
+class CloudinarySignatureView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        import time
+        import cloudinary.utils
+        from django.conf import settings
+
+        cloud_name = getattr(settings, 'CLOUDINARY_CLOUD_NAME')
+        api_key = getattr(settings, 'CLOUDINARY_API_KEY')
+        api_secret = getattr(settings, 'CLOUDINARY_API_SECRET')
+
+        timestamp = int(time.time())
+        params = {
+            'timestamp': timestamp,
+            'folder': 'vendor_nest'
+        }
+        signature = cloudinary.utils.api_sign_request(params, api_secret)
+        return Response({
+            'signature': signature,
+            'timestamp': timestamp,
+            'cloud_name': cloud_name,
+            'api_key': api_key,
+            'folder': 'vendor_nest'
         })
 
