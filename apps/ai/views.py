@@ -4,7 +4,7 @@ import random
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 try:
     import google.generativeai as genai
     has_gemini = True
@@ -40,9 +40,15 @@ if has_gemini and api_key:
         print(f"Gemini configuration error: {e}")
 
 class ProductDescriptionView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        user = request.user
+        if hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
+            return Response(
+                {"error": "AI features are not available on the Starter plan. Please upgrade to Growth or Enterprise to unlock AI description generation."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         name = request.data.get("name")
         category = request.data.get("category", "")
         features = request.data.get("features", "")
@@ -90,9 +96,15 @@ class ProductDescriptionView(APIView):
 
 
 class ProductSEOView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        user = request.user
+        if hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
+            return Response(
+                {"error": "AI tools are not available on the Starter plan. Please upgrade to Growth or Enterprise to unlock AI SEO generator."},
+                status=status.HTTP_403_FORBIDDEN
+            )
         name = request.data.get("name")
         category = request.data.get("category", "")
         description = request.data.get("description", "")
@@ -451,5 +463,56 @@ class AIChatSupportView(APIView):
                     model = genai.GenerativeModel("gemini-flash-latest")
                     response = model.generate_content(prompt)
             return Response({"reply": response.text.strip()})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StoreDescriptionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.role == 'seller':
+            seller_profile = getattr(user, 'seller_profile', None)
+            if seller_profile and seller_profile.plan == 'starter':
+                return Response(
+                    {"error": "AI features are not available on the Starter plan. Please upgrade to Growth or Enterprise to unlock AI description generation."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        name = request.data.get("name")
+        description_style = request.data.get("style", "professional")
+
+        if not name:
+            return Response({"error": "Store name is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        prompt = (
+            f"Create a professional, highly engaging, and customer-focused storefront shop description for an e-commerce merchant store named '{name}' "
+            f"using a '{description_style}' tone and style. "
+            f"It should be around 60 to 100 words long and summarize the store's dedication to quality, customer trust, and value. "
+            f"Just return the plain text of the description directly, without any code block markdown wrappers or extra tags."
+        )
+
+        if not has_gemini or not api_key:
+            mock_desc = (
+                f"Welcome to {name}, your premier destination for high-quality products and exceptional service. "
+                f"We are dedicated to bringing you the best selection of curated goods designed to elevate your everyday lifestyle. "
+                f"With a focus on reliability, premium quality, and customer satisfaction, we strive to deliver an unparalleled shopping experience. "
+                f"Thank you for choosing us as your trusted shopping partner!"
+            )
+            return Response({"description": mock_desc})
+
+        try:
+            try:
+                model = genai.GenerativeModel("gemini-3.5-flash")
+                response = model.generate_content(prompt)
+            except Exception:
+                try:
+                    model = genai.GenerativeModel("gemini-2.5-flash")
+                    response = model.generate_content(prompt)
+                except Exception:
+                    model = genai.GenerativeModel("gemini-flash-latest")
+                    response = model.generate_content(prompt)
+            return Response({"description": response.text.strip()})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

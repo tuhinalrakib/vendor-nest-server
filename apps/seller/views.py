@@ -32,6 +32,11 @@ class SellerProfileView(generics.RetrieveUpdateAPIView):
         cache.set(cache_key, response.data, 86400)  # Cache for 24 hours
         return response
 
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        cache_key = f"seller_profile_cache_{self.request.user.id}"
+        cache.delete(cache_key)
+
 
 from rest_framework import viewsets
 from .serializers import AdminSellerProfileSerializer
@@ -59,3 +64,14 @@ class AdminSellerProfileViewSet(viewsets.ModelViewSet):
         ).exclude(
             user__is_superuser=True
         ).order_by('-created_at')
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        cache_key = f"seller_profile_cache_{serializer.instance.user.id}"
+        cache.delete(cache_key)
+
+    def perform_destroy(self, instance):
+        user_id = instance.user.id
+        super().perform_destroy(instance)
+        cache_key = f"seller_profile_cache_{user_id}"
+        cache.delete(cache_key)

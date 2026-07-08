@@ -29,3 +29,28 @@ class Coupon(BaseModel):
 
     def __str__(self):
         return f"{self.code} - {self.discount_value} ({self.discount_type})"
+
+
+class UserCoupon(BaseModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name="saved_coupons"
+    )
+    coupon = models.ForeignKey(
+        Coupon,
+        on_delete=models.CASCADE,
+        related_name="users_saved"
+    )
+    is_used = models.BooleanField(default=False)
+    used_at = models.DateTimeField(null=True, blank=True)
+    saved_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('user', 'coupon')
+        ordering = ['-saved_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.coupon.code} (Used: {self.is_used})"
+

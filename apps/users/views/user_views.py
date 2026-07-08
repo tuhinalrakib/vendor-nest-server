@@ -33,6 +33,11 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
         cache.set(cache_key, response.data, 86400)  # Cache for 24 hours
         return response
 
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        cache.delete('users_list_cache')
+        cache.delete(f"user_profile_cache_{self.request.user.id}")
+
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
@@ -57,5 +62,16 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
         if self.request.method in ["PUT", "PATCH"]:
             return AdminUserUpdateSerializer
         return UserSerializer
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        cache.delete('users_list_cache')
+        cache.delete(f"user_profile_cache_{serializer.instance.id}")
+
+    def perform_destroy(self, instance):
+        user_id = instance.id
+        super().perform_destroy(instance)
+        cache.delete('users_list_cache')
+        cache.delete(f"user_profile_cache_{user_id}")
 
 

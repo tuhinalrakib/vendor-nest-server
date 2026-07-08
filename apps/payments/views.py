@@ -104,7 +104,8 @@ class ShurjopayInitiateView(views.APIView):
         init_res = ShurjopaySandboxClient.initiate_payment(
             amount=str(order.total_amount),
             return_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/",
-            cancel_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/?status=cancel"
+            cancel_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/?status=cancel",
+            order=order
         )
 
         # Create pending transaction
@@ -121,36 +122,49 @@ class ShurjopayInitiateView(views.APIView):
             "sp_tx_id": init_res["sp_tx_id"]
         })
 
+
 class ShurjopayCallbackView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        sp_tx_id = request.query_params.get("sp_tx_id")
-        status_param = request.query_params.get("status")
+        query_string = request.META.get('QUERY_STRING', '')
+        # Handle cases like ?status=cancel?order_id=XXX by converting all '?' to '&'
+        normalized_query = query_string.replace('?', '&')
+        from django.http import QueryDict
+        params = QueryDict(normalized_query)
+
+        sp_tx_id = params.get("order_id") or params.get("sp_tx_id")
+        status_param = params.get("status")
 
         if not sp_tx_id:
-            return Response({"error": "Transaction ID is missing"}, status=status.HTTP_400_BAD_REQUEST)
+            logger.error("Shurjopay callback error: Transaction ID is missing.")
+            return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&error=missing_transaction_id")
 
         try:
             tx = Transaction.objects.get(transaction_id=sp_tx_id)
         except Transaction.DoesNotExist:
-            return Response({"error": "Transaction not found"}, status=status.HTTP_404_NOT_FOUND)
+            logger.error(f"Shurjopay callback error: Transaction not found for ID {sp_tx_id}")
+            return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&error=transaction_not_found")
 
-        if status_param == "success":
-            # Verify transaction
-            res = ShurjopaySandboxClient.verify_payment(sp_tx_id)
-            if res["status"] == "success":
-                tx.status = "completed"
-                tx.save()
-                
-                # Mark order paid
-                order = tx.order
-                order.status = "paid"
-                order.save()
-                
-                # Redirect back to the frontend success landing area
-                return redirect(f"{settings.FRONTEND_URL}/order-success?type=shurjopay&order_id={order.id}")
-                
+        if status_param == "cancel":
+            tx.status = "failed"
+            tx.save()
+            return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&payment_status=cancel")
+
+        # Verify transaction
+        res = ShurjopaySandboxClient.verify_payment(sp_tx_id)
+        if res.get("status") == "success":
+            tx.status = "completed"
+            tx.save()
+            
+            # Mark order paid
+            order = tx.order
+            order.status = "paid"
+            order.save()
+            
+            # Redirect back to the frontend success landing area
+            return redirect(f"{settings.FRONTEND_URL}/order-success?type=shurjopay&order_id={order.id}")
+            
         tx.status = "failed"
         tx.save()
         return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false")

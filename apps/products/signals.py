@@ -3,11 +3,10 @@ from django.dispatch import receiver
 from django.core.cache import cache
 from .models import Product, Review
 
+import time
+
 def _invalidate_all_products():
-    try:
-        cache.incr("products_cache_version")
-    except ValueError:
-        cache.set("products_cache_version", 1)
+    cache.set("products_cache_version", int(time.time()))
 
 @receiver([post_save, post_delete], sender=Product)
 def invalidate_product_cache(sender, instance, **kwargs):

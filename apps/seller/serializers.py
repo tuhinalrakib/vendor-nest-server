@@ -16,10 +16,25 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "rejection_reason",
             "stripe_account_id",
             "stripe_connected",
+            "plan",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "status", "rejection_reason", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        subdomain = attrs.get('subdomain')
+        plan = attrs.get('plan')
+        if not plan and self.instance:
+            plan = self.instance.plan
+        if not plan:
+            plan = 'starter'
+
+        if subdomain and plan == 'starter':
+            raise serializers.ValidationError({
+                "subdomain": "Custom subdomains are only available on Growth and Enterprise plans."
+            })
+        return attrs
 
 
 class AdminSellerProfileSerializer(serializers.ModelSerializer):
@@ -42,8 +57,8 @@ class AdminSellerProfileSerializer(serializers.ModelSerializer):
             "rejection_reason",
             "stripe_account_id",
             "stripe_connected",
+            "plan",
             "created_at",
             "updated_at",
         ]
         read_only_fields = ["id", "owner_name", "email", "created_at", "updated_at"]
-

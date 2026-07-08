@@ -16,6 +16,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         queryset = Order.objects.all().select_related('buyer').prefetch_related('items__product__seller', 'transactions')
         if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
             return queryset
+        if hasattr(user, 'role') and user.role == 'seller':
+            return queryset.filter(items__product__seller__user=user).distinct()
         return queryset.filter(buyer=user)
 
     def perform_create(self, serializer):

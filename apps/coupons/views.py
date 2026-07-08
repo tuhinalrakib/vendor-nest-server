@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.utils import timezone
 from django.core.cache import cache
-from .models import Coupon
+from .models import Coupon, UserCoupon
 from .serializers import CouponSerializer
 from seller.models import SellerProfile
 from products.models import Product
@@ -37,6 +37,7 @@ class CouponViewSet(viewsets.ModelViewSet):
     def get_list_cache_key(self, request):
         import hashlib
         import json
+        import time
 
         user = request.user
         if not user or not user.is_authenticated:
@@ -46,15 +47,15 @@ class CouponViewSet(viewsets.ModelViewSet):
         elif hasattr(user, 'role') and user.role == 'seller':
             base_key = f'coupons_list_seller_{user.id}'
         else:
-            base_key = 'coupons_list_public'
+            base_key = f'coupons_list_customer_{user.id}'
 
         # Hash query parameters to prevent key collisions
         query_params = dict(request.query_params.items())
         params_str = json.dumps(query_params, sort_keys=True)
         params_hash = hashlib.md5(params_str.encode('utf-8')).hexdigest()
 
-        # Retrieve/initialize cache version for coupons
-        cache_version = cache.get_or_set("coupons_cache_version", 1)
+        # Retrieve/initialize cache version for coupons using timestamp
+        cache_version = cache.get_or_set("coupons_cache_version", int(time.time()))
 
         return f"{base_key}_v{cache_version}_{params_hash}"
 
@@ -108,9 +109,25 @@ class CouponViewSet(viewsets.ModelViewSet):
         # Customers see active coupons
         return Coupon.objects.filter(is_active=True, expiry_date__gte=timezone.now().date())
 
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        from .signals import clear_coupons_cache
+        clear_coupons_cache()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .signals import clear_coupons_cache
+        clear_coupons_cache(serializer.instance.id)
+
+    def perform_destroy(self, instance):
+        instance_id = instance.id
+        super().perform_destroy(instance)
+        from .signals import clear_coupons_cache
+        clear_coupons_cache(instance_id)
+
 
 class CouponValidationView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def post(self, request):
         codes = request.data.get("codes", [])
@@ -166,6 +183,15 @@ class CouponValidationView(APIView):
                     "reason": "Coupon code is invalid."
                 })
                 continue
+
+            # Check if user has already used this coupon
+            if request.user and request.user.is_authenticated:
+                if UserCoupon.objects.filter(user=request.user, coupon=coupon, is_used=True).exists():
+                    invalid_coupons.append({
+                        "code": c_code,
+                        "reason": "You have already used this coupon."
+                    })
+                    continue
 
             # Check if active
             if not coupon.is_active:
@@ -257,3 +283,128 @@ class CouponValidationView(APIView):
             "total_discount": str(total_discount.quantize(Decimal("0.01"))),
             "final_subtotal": str(max(Decimal("0.00"), total_subtotal).quantize(Decimal("0.01")))
         })
+
+
+class SaveCouponView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        coupon_id = request.data.get("coupon_id")
+        coupon_code = request.data.get("code")
+        
+        if not coupon_id and not coupon_code:
+            return Response({"error": "Coupon ID or Code is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            if coupon_id:
+                coupon = Coupon.objects.get(id=coupon_id)
+            else:
+                coupon = Coupon.objects.get(code=coupon_code.strip().upper())
+        except (Coupon.DoesNotExist, ValueError):
+            return Response({"error": "Coupon not found."}, status=status.HTTP_404_NOT_FOUND)
+            
+        if not coupon.is_active or coupon.expiry_date < timezone.now().date():
+            return Response({"error": "Coupon is expired or inactive."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user_coupon, created = UserCoupon.objects.get_or_create(
+            user=request.user,
+            coupon=coupon,
+            defaults={"is_used": False}
+        )
+        
+        if not created:
+            if user_coupon.is_used:
+                return Response({"error": "You have already used this coupon."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"message": "Coupon is already saved."}, status=status.HTTP_200_OK)
+            
+        return Response({"message": "Coupon saved successfully.", "is_clipped": True}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        coupon_id = request.data.get("coupon_id")
+        coupon_code = request.data.get("code")
+        
+        if not coupon_id and not coupon_code:
+            return Response({"error": "Coupon ID or Code is required."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            if coupon_id:
+                user_coupon = UserCoupon.objects.get(user=request.user, coupon_id=coupon_id)
+            else:
+                user_coupon = UserCoupon.objects.get(user=request.user, coupon__code=coupon_code.strip().upper())
+            
+            if user_coupon.is_used:
+                return Response({"error": "Cannot remove a used coupon."}, status=status.HTTP_400_BAD_REQUEST)
+                
+            user_coupon.delete()
+            return Response({"message": "Coupon unsaved successfully.", "is_clipped": False}, status=status.HTTP_200_OK)
+        except UserCoupon.DoesNotExist:
+            return Response({"error": "Saved coupon not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class SavedCouponsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user_coupons = UserCoupon.objects.filter(
+            user=request.user,
+            is_used=False,
+            coupon__is_active=True,
+            coupon__expiry_date__gte=timezone.now().date()
+        ).select_related('coupon')
+        
+        coupons = [uc.coupon for uc in user_coupons]
+        serializer = CouponSerializer(coupons, many=True, context={'request': request})
+        return Response(serializer.data)
+
+
+class ApplicableCouponsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        cart_items = request.data.get("cart_items", [])
+        if not cart_items:
+            return Response([], status=status.HTTP_200_OK)
+
+        # Calculate subtotals
+        seller_subtotals = {}
+        total_subtotal = Decimal("0.00")
+        for item in cart_items:
+            price = Decimal(str(item.get("price", "0.00")))
+            quantity = int(item.get("quantity", 1))
+            seller_id = item.get("seller_id")
+            
+            if not seller_id:
+                product_id = item.get("product_id")
+                if product_id:
+                    try:
+                        product = Product.objects.get(id=product_id)
+                        if product.seller:
+                            seller_id = str(product.seller.id)
+                    except Product.DoesNotExist:
+                        pass
+            
+            item_subtotal = price * quantity
+            total_subtotal += item_subtotal
+            if seller_id:
+                seller_subtotals[seller_id] = seller_subtotals.get(seller_id, Decimal("0.00")) + item_subtotal
+
+        # Fetch active, unexpired coupons that the user has NOT already used
+        current_date = timezone.now().date()
+        used_coupon_ids = UserCoupon.objects.filter(user=request.user, is_used=True).values_list('coupon_id', flat=True)
+        active_coupons = Coupon.objects.filter(is_active=True, expiry_date__gte=current_date).exclude(id__in=used_coupon_ids)
+        
+        # Filter coupons that are eligible based on the cart subtotal / seller subtotal
+        eligible_coupons = []
+        for coupon in active_coupons:
+            if coupon.seller:
+                seller_id = str(coupon.seller.id)
+                if seller_id in seller_subtotals:
+                    if seller_subtotals[seller_id] >= coupon.min_purchase:
+                        eligible_coupons.append(coupon)
+            else:
+                if total_subtotal >= coupon.min_purchase:
+                    eligible_coupons.append(coupon)
+
+        serializer = CouponSerializer(eligible_coupons, many=True, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
+

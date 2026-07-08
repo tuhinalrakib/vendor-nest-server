@@ -47,14 +47,31 @@ class ResendVerificationEmailView(APIView):
             return Response({"error": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            user = User.objects.filter(email__iexact=email).first()
+            if not user:
+                return Response({"error": "No account found with this email address."}, status=status.HTTP_404_NOT_FOUND)
+
+            if user.is_email_verified:
+                return Response({"message": "This email is already verified. Please log in."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Generate token and uid
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            activation_link = f"{frontend_url}/verify-email?uid={uid}&token={token}"
+            
+            subject = "Verify your email - VendorNest"
+            message = f"Hello {user.get_full_name() or user.username},\n\nPlease verify your email by clicking the link below:\n{activation_link}\n\nThank you!"
+            
             send_mail(
-                "Test email - VendorNest",
-                "This is a test email to verify Django SMTP settings.",
+                subject,
+                message,
                 settings.DEFAULT_FROM_EMAIL,
-                [email],
+                [user.email],
                 fail_silently=False,
             )
-            return Response({"message": f"Test email successfully sent to {email}"}, status=status.HTTP_200_OK)
+            return Response({"message": f"Verification email successfully sent to {email}."}, status=status.HTTP_200_OK)
         except Exception as e:
             import traceback
             tb = traceback.format_exc()

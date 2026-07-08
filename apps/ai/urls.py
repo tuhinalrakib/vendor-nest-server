@@ -6,7 +6,8 @@ from .views import (
     ProductRecommendationView,
     SalesForecastView,
     AIChatSupportView,
-    CategoryDescriptionView
+    CategoryDescriptionView,
+    StoreDescriptionView
 )
 
 urlpatterns = [
@@ -17,4 +18,5 @@ urlpatterns = [
     path('sales-forecast/', SalesForecastView.as_view(), name='ai_sales_forecast'),
     path('chat/', AIChatSupportView.as_view(), name='ai_chat_support'),
     path('generate-category-description/', CategoryDescriptionView.as_view(), name='ai_category_description'),
+    path('generate-store-description/', StoreDescriptionView.as_view(), name='ai_store_description'),
 ]

@@ -46,3 +46,18 @@ class CategoryViewSet(viewsets.ModelViewSet):
         response = super().retrieve(request, *args, **kwargs)
         cache.set(cache_key, response.data, 86400)
         return response
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        from .signals import invalidate_categories_cache
+        invalidate_categories_cache(sender=Category, instance=serializer.instance)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .signals import invalidate_categories_cache
+        invalidate_categories_cache(sender=Category, instance=serializer.instance)
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        from .signals import invalidate_categories_cache
+        invalidate_categories_cache(sender=Category, instance=instance)

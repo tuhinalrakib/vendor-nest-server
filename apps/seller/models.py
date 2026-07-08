@@ -26,6 +26,12 @@ class SellerProfile(BaseModel):
     rejection_reason = models.TextField(blank=True, null=True)
     stripe_account_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_connected = models.BooleanField(default=False)
+    PLAN_CHOICES = [
+        ("starter", "Starter"),
+        ("growth", "Growth"),
+        ("enterprise", "Enterprise"),
+    ]
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default="starter")
 
     def __str__(self):
         return f"{self.shop_name or self.user.get_full_name()} - {self.status}"

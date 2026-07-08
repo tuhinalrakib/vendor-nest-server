@@ -14,11 +14,21 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     buyer_name = serializers.ReadOnlyField(source='buyer.username')
     payment_method = serializers.SerializerMethodField()
+    coupon_codes = serializers.ListField(
+        child=serializers.CharField(),
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = Order
-        fields = ['id', 'buyer', 'buyer_name', 'total_amount', 'status', 'items', 'payment_method', 'created_at', 'shipping_name', 'shipping_phone', 'shipping_address', 'shipping_city', 'shipping_zip']
-        read_only_fields = ['id', 'buyer', 'buyer_name', 'status', 'created_at']
+        fields = [
+            'id', 'buyer', 'buyer_name', 'total_amount', 'status', 'items', 
+            'payment_method', 'created_at', 'shipping_name', 'shipping_phone', 
+            'shipping_address', 'shipping_city', 'shipping_zip', 'coupon_codes',
+            'tracking_number', 'courier_name', 'estimated_delivery'
+        ]
+        read_only_fields = ['id', 'buyer', 'buyer_name', 'created_at']
 
     def get_payment_method(self, obj):
         # Prefer direct field on Order (set at COD/payment time)
@@ -32,10 +42,32 @@ class OrderSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
+        coupon_codes = validated_data.pop('coupon_codes', [])
         request = self.context.get('request')
         buyer = validated_data.pop('buyer', request.user if request else None)
         
         order = Order.objects.create(buyer=buyer, **validated_data)
         for item_data in items_data:
             OrderItem.objects.create(order=order, **item_data)
+
+        if coupon_codes and buyer:
+            from coupons.models import UserCoupon, Coupon
+            from django.utils import timezone
+            normalized_codes = [c.strip().upper() for c in coupon_codes]
+            for code in normalized_codes:
+                try:
+                    coupon = Coupon.objects.get(code=code)
+                    user_coupon, created = UserCoupon.objects.get_or_create(
+                        user=buyer,
+                        coupon=coupon,
+                        defaults={"is_used": True, "used_at": timezone.now()}
+                    )
+                    if not created and not user_coupon.is_used:
+                        user_coupon.is_used = True
+                        user_coupon.used_at = timezone.now()
+                        user_coupon.save()
+                except Coupon.DoesNotExist:
+                    pass
+
         return order
+

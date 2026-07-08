@@ -1,3 +1,5 @@
+from rest_framework.views import APIView
+from rest_framework import status
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
 from django.core.cache import cache
@@ -64,8 +66,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         params_str = json.dumps(query_params, sort_keys=True)
         params_hash = hashlib.md5(params_str.encode('utf-8')).hexdigest()
 
-        # Retrieve/initialize cache version for products
-        cache_version = cache.get_or_set("products_cache_version", 1)
+        # Retrieve/initialize cache version for products using timestamp
+        import time
+        cache_version = cache.get_or_set("products_cache_version", int(time.time()))
 
         return f"{base_key}_v{cache_version}_{params_hash}"
 
@@ -108,8 +111,31 @@ class ProductViewSet(viewsets.ModelViewSet):
             
         return queryset.filter(seller__status="approved")
 
-from rest_framework.views import APIView
-from rest_framework import status
+    def perform_create(self, serializer):
+        user = self.request.user
+        seller_profile = getattr(user, 'seller_profile', None)
+        if seller_profile:
+            if seller_profile.plan == 'starter':
+                product_count = Product.objects.filter(seller=seller_profile).count()
+                if product_count >= 15:
+                    from rest_framework.exceptions import ValidationError
+                    raise ValidationError(
+                        {"detail": "Product listing limit reached. You can list up to 15 products on the Starter plan. Please upgrade your plan in settings."}
+                    )
+        super().perform_create(serializer)
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=serializer.instance)
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=serializer.instance)
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=instance)
+
 
 class CartView(APIView):
     permission_classes = [permissions.IsAuthenticated]

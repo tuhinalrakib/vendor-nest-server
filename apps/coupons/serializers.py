@@ -4,18 +4,34 @@ from seller.models import SellerProfile
 
 class CouponSerializer(serializers.ModelSerializer):
     seller_shop = serializers.SerializerMethodField()
+    is_clipped = serializers.SerializerMethodField()
+    is_used = serializers.SerializerMethodField()
 
     class Meta:
         model = Coupon
         fields = [
             'id', 'code', 'seller', 'seller_shop', 'discount_type', 
             'discount_value', 'min_purchase', 'expiry_date', 'is_active', 
-            'created_at', 'updated_at'
+            'is_clipped', 'is_used', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'seller', 'created_at', 'updated_at']
 
     def get_seller_shop(self, obj):
         return obj.seller.shop_name if obj.seller else "Platform Sitewide"
+
+    def get_is_clipped(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+        return obj.users_saved.filter(user=request.user, is_used=False).exists()
+
+    def get_is_used(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+        return obj.users_saved.filter(user=request.user, is_used=True).exists()
+
+
 
     def validate_code(self, value):
         return value.strip().upper()
