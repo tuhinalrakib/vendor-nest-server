@@ -148,6 +148,55 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 {"detail": "email_not_verified", "message": "Your email is not verified. Please verify your email first."}
             )
             
-        return super().validate(attrs)
+        data = super().validate(attrs)
+        
+        # Admin 2FA/OTP login workflow
+        if user.role == "admin":
+            import uuid
+            import random
+            from django.core.cache import cache
+            from django.core.mail import send_mail
+            from django.conf import settings
+            import threading
+            
+            temp_token = uuid.uuid4().hex
+            otp = f"{random.randint(100000, 999999)}"
+            
+            # Store credentials and tokens in cache for 5 minutes (300 seconds)
+            cache.set(f"admin_otp_{temp_token}", {
+                "user_id": user.id,
+                "otp": otp,
+                "access": data["access"],
+                "refresh": data["refresh"]
+            }, timeout=300)
+            
+            # Send verification email asynchronously
+            subject = "Admin Login Verification - OTP Code"
+            message = f"Hello {user.get_full_name() or user.username},\n\nA login attempt was made to your admin account on VendorNest.\n\nYour 2FA verification OTP is: {otp}\nThis code is valid for 5 minutes.\n\nIf you did not request this, please secure your account credentials immediately.\n\nBest regards,\nThe VendorNest Team"
+            
+            def send_otp_email():
+                try:
+                    send_mail(
+                        subject,
+                        message,
+                        settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
+                        [user.email],
+                        fail_silently=False
+                    )
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Failed to send admin login OTP email to {user.email}: {e}")
+
+            threading.Thread(target=send_otp_email, daemon=True).start()
+            
+            return {
+                "otp_required": True,
+                "temp_token": temp_token,
+                "email": user.email
+            }
+            
+        return data
+
 
 
