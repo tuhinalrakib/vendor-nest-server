@@ -300,17 +300,157 @@ class Order(BaseModel):
                     </html>
                     """
                     
-                    send_mail(
-                        subject,
-                        message,
-                        settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
-                        [self.buyer.email],
-                        fail_silently=False,
-                        html_message=html_message
-                    )
+                    import threading
+                    
+                    def send_async_emails():
+                        try:
+                            # 1. Send confirmation email to the buyer
+                            send_mail(
+                                subject,
+                                message,
+                                settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
+                                [self.buyer.email],
+                                fail_silently=False,
+                                html_message=html_message
+                            )
+                        except Exception as e_buyer:
+                            print(f"Failed to send order confirmation email to buyer: {e_buyer}")
+                        
+                        try:
+                            # 2. Group items by seller and send order alerts to each seller
+                            from collections import defaultdict
+                            seller_items = defaultdict(list)
+                            for item in items:
+                                if item.product and item.product.seller:
+                                    seller_items[item.product.seller].append(item)
+                            
+                            for seller, s_items in seller_items.items():
+                                recipient_email = seller.support_email or (seller.user.email if seller.user else None)
+                                if recipient_email:
+                                    try:
+                                        seller_subject = f"[New Order Alert] Order #{self.id} - Action Required"
+                                        
+                                        # Build text and HTML for the products
+                                        items_text = ""
+                                        items_html_rows = ""
+                                        seller_subtotal = 0.00
+                                        
+                                        for s_item in s_items:
+                                            item_price = float(s_item.price)
+                                            item_subtotal = item_price * s_item.quantity
+                                            seller_subtotal += item_subtotal
+                                            items_text += f"- {s_item.product.name} (Qty: {s_item.quantity}) - ${item_price:.2f} each\n"
+                                            
+                                            items_html_rows += f"""
+                                            <tr>
+                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: left; font-size: 13px; color: #27272a;">{s_item.product.name}</td>
+                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: center; font-size: 13px; color: #27272a;">{s_item.quantity}</td>
+                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-size: 13px; color: #27272a;">${item_price:.2f}</td>
+                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-weight: bold; font-size: 13px; color: #18181b;">${item_subtotal:.2f}</td>
+                                            </tr>
+                                            """
+                                        
+                                        seller_message = (
+                                            f"Hello {seller.shop_name or 'Seller'},\n\n"
+                                            f"Good news! You have received a new order on VendorNest.\n\n"
+                                            f"Order ID: #{self.id}\n"
+                                            f"Payment Method: {self.get_payment_method_display()}\n"
+                                            f"Total to receive: ${seller_subtotal:.2f}\n\n"
+                                            f"Items to pack:\n{items_text}\n"
+                                            f"Shipping Address:\n"
+                                            f"Name: {self.shipping_name or self.buyer.username}\n"
+                                            f"Phone: {self.shipping_phone or 'N/A'}\n"
+                                            f"Address: {self.shipping_address or 'N/A'}, {self.shipping_city or 'N/A'}, Zip {self.shipping_zip or 'N/A'}\n\n"
+                                            f"Please package these items immediately and ship them to the buyer using your preferred courier service.\n\n"
+                                            f"Best regards,\n"
+                                            f"The VendorNest Team"
+                                        )
+                                        
+                                        seller_html = f"""
+                                        <!DOCTYPE html>
+                                        <html>
+                                        <head>
+                                            <meta charset="utf-8">
+                                        </head>
+                                        <body style="margin: 0; padding: 0; background-color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                                            <table cellpadding="0" cellspacing="0" style="width: 100%; padding: 40px 20px; background-color: #f4f4f5;">
+                                                <tr>
+                                                    <td align="center">
+                                                        <table cellpadding="0" cellspacing="0" style="width: 100%; max-width: 600px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e4e4e7; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+                                                            <tr>
+                                                                <td style="background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 32px; text-align: center; color: white;">
+                                                                    <div style="font-size: 11px; font-weight: 800; color: #c7d2fe; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">Order Notification</div>
+                                                                    <h1 style="margin: 0; font-size: 22px; font-weight: 900;">New Order Received!</h1>
+                                                                    <div style="font-size: 13px; margin-top: 8px; font-weight: 500; color: #e0e7ff;">Order #{self.id}</div>
+                                                                </td>
+                                                            </tr>
+                                                            <tr>
+                                                                <td style="padding: 32px;">
+                                                                    <p style="font-size: 15px; color: #27272a; margin-bottom: 20px;">
+                                                                        Hello <strong>{seller.shop_name or 'Seller'}</strong>,<br><br>
+                                                                        Congratulations! A customer has purchased your product(s) on VendorNest. Please package the items below and ship them to the customer's address as soon as possible.
+                                                                    </p>
+                                                                    
+                                                                    <div style="font-weight: 800; font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Items to Pack</div>
+                                                                    <table cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                                                                        <thead>
+                                                                            <tr style="border-bottom: 2px solid #e4e4e7;">
+                                                                                <th style="padding: 8px; text-align: left; font-size: 11px; font-weight: 800; color: #71717a; text-transform: uppercase;">Product</th>
+                                                                                <th style="padding: 8px; text-align: center; font-size: 11px; font-weight: 800; color: #71717a; text-transform: uppercase; width: 60px;">Qty</th>
+                                                                                <th style="padding: 8px; text-align: right; font-size: 11px; font-weight: 800; color: #71717a; text-transform: uppercase; width: 80px;">Price</th>
+                                                                                <th style="padding: 8px; text-align: right; font-size: 11px; font-weight: 800; color: #71717a; text-transform: uppercase; width: 90px;">Total</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {items_html_rows}
+                                                                        </tbody>
+                                                                    </table>
+                                                                    
+                                                                    <div style="text-align: right; font-size: 14px; color: #4b5563; margin-bottom: 24px;">
+                                                                        Your Share Subtotal: <strong style="color: #4f46e5; font-size: 16px;">${seller_subtotal:.2f}</strong>
+                                                                    </div>
+                                                                    
+                                                                    <div style="font-weight: 800; font-size: 11px; color: #71717a; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;">Customer Shipping Details</div>
+                                                                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-size: 12px; color: #334155; line-height: 1.6; text-align: left;">
+                                                                        <div style="font-weight: 700; color: #1e293b;">{self.shipping_name or self.buyer.username}</div>
+                                                                        <div>📞 {self.shipping_phone or 'N/A'}</div>
+                                                                        <div style="margin-top: 4px;">📍 {self.shipping_address or 'N/A'}, {self.shipping_city or 'N/A'}, Zip {self.shipping_zip or 'N/A'}</div>
+                                                                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-weight: 600; color: #0f172a;">
+                                                                            Payment Method: {self.get_payment_method_display()}
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <p style="margin-top: 24px; font-size: 12px; color: #9ca3af; line-height: 1.5; text-align: center;">
+                                                                        Please log into your seller panel to update the shipment tracking status once sent.
+                                                                    </p>
+                                                                </td>
+                                                            </tr>
+                                                        </table>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                        </body>
+                                        </html>
+                                        """
+                                        
+                                        send_mail(
+                                            seller_subject,
+                                            seller_message,
+                                            settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
+                                            [recipient_email],
+                                            fail_silently=False,
+                                            html_message=seller_html
+                                        )
+                                        print(f"Seller order notification sent successfully to {recipient_email}")
+                                    except Exception as e_seller:
+                                        print(f"Failed to send order email alert to seller {recipient_email}: {e_seller}")
+                        except Exception as e_seller_group:
+                            print(f"Failed in seller email grouping/sending: {e_seller_group}")
+
+                    threading.Thread(target=send_async_emails, daemon=True).start()
                     email_updated = True
                 except Exception as e:
-                    print(f"Failed to send order confirmation email: {e}")
+                    print(f"Failed to initiate background order emails: {e}")
                     
             sms_updated = False
             if not self.sms_sent:
