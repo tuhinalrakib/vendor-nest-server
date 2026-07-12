@@ -35,6 +35,7 @@ class Order(BaseModel):
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     stock_deducted = models.BooleanField(default=False)
+    ledger_credited = models.BooleanField(default=False)
     email_sent = models.BooleanField(default=False)
     sms_sent = models.BooleanField(default=False)
     
@@ -57,11 +58,62 @@ class Order(BaseModel):
             if not self.stock_deducted:
                 items = self.items.all()
                 if items.exists():
+                    from django.core.mail import send_mail
+                    from django.conf import settings
                     for item in items:
                         if item.product:
-                            item.product.stock = max(0, item.product.stock - item.quantity)
+                            old_stock = item.product.stock
+                            new_stock = max(0, old_stock - item.quantity)
+                            item.product.stock = new_stock
                             item.product.save()
+
+                            # Trigger email alerts on transitions
+                            seller_profile = item.product.seller
+                            if seller_profile:
+                                recipient_email = seller_profile.support_email or (seller_profile.user.email if seller_profile.user else None)
+                                if recipient_email:
+                                    if old_stock > 0 and new_stock == 0:
+                                        try:
+                                            send_mail(
+                                                subject=f"[Alert] Product Out of Stock: {item.product.name}",
+                                                message=f"Hello {seller_profile.shop_name or 'Seller'},\n\nYour product '{item.product.name}' (SKU: {item.product.sku}) is now OUT OF STOCK.\n\nPlease update your stock in the seller inventory panel immediately to resume sales.\n\nBest regards,\nVendorNest Platform",
+                                                from_email=settings.DEFAULT_FROM_EMAIL,
+                                                recipient_list=[recipient_email],
+                                                fail_silently=True
+                                            )
+                                        except Exception as e:
+                                            print(f"Failed to send out of stock email: {e}")
+                                    elif old_stock >= 8 and 0 < new_stock < 8:
+                                        try:
+                                            send_mail(
+                                                subject=f"[Alert] Low Stock Warning: {item.product.name}",
+                                                message=f"Hello {seller_profile.shop_name or 'Seller'},\n\nYour product '{item.product.name}' (SKU: {item.product.sku}) is running low on stock.\n\nCurrent stock: {new_stock} units (below the 8 units threshold).\n\nPlease restock this item soon.\n\nBest regards,\nVendorNest Platform",
+                                                from_email=settings.DEFAULT_FROM_EMAIL,
+                                                recipient_list=[recipient_email],
+                                                fail_silently=True
+                                            )
+                                        except Exception as e:
+                                            print(f"Failed to send low stock email: {e}")
                     stock_updated = True
+
+            ledger_updated = False
+            if not self.ledger_credited:
+                items = self.items.all()
+                if items.exists():
+                    from decimal import Decimal
+                    for item in items:
+                        if item.product and item.product.seller:
+                            seller_profile = item.product.seller
+                            
+                            # Standard SAAS Commission (e.g. 10% platform fee, seller receives 90%)
+                            commission_rate = Decimal("0.10")
+                            item_total = item.price * item.quantity
+                            platform_fee = item_total * commission_rate
+                            seller_amount = item_total - platform_fee
+                            
+                            seller_profile.balance += seller_amount
+                            seller_profile.save()
+                    ledger_updated = True
                 
             email_updated = False
             if not self.email_sent:
@@ -286,11 +338,12 @@ class Order(BaseModel):
                     print(f"Failed to send order confirmation SMS: {e}")
             
             # Update tracked states without calling save() recursively
-            if stock_updated or email_updated or sms_updated:
+            if stock_updated or email_updated or sms_updated or ledger_updated:
                 Order.objects.filter(pk=self.pk).update(
                     stock_deducted=True if stock_updated else self.stock_deducted,
                     email_sent=True if email_updated else self.email_sent,
-                    sms_sent=True if sms_updated else self.sms_sent
+                    sms_sent=True if sms_updated else self.sms_sent,
+                    ledger_credited=True if ledger_updated else self.ledger_credited
                 )
 
     def __str__(self):

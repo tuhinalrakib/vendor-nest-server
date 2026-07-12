@@ -19,6 +19,11 @@ class PayoutSerializer(serializers.ModelSerializer):
         return obj.seller.shop_name if obj.seller else "Platform Store"
 
 class PayoutSettingsSerializer(serializers.ModelSerializer):
+    balance = serializers.SerializerMethodField()
+
     class Meta:
         model = PayoutSettings
-        fields = ['payoneer_email', 'wise_recipient_name', 'wise_iban_or_account']
+        fields = ['payoneer_email', 'wise_recipient_name', 'wise_iban_or_account', 'balance']
+
+    def get_balance(self, obj):
+        return str(obj.seller.balance) if obj.seller else "0.00"

@@ -17,6 +17,7 @@ class Product(BaseModel):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     compare_at_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock = models.IntegerField(default=0)
+    low_stock_threshold = models.IntegerField(default=10)
     description = models.TextField(blank=True, null=True)
     seo_title = models.CharField(max_length=255, blank=True, null=True)
     seo_description = models.TextField(blank=True, null=True)

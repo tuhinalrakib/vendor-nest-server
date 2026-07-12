@@ -26,6 +26,7 @@ class SellerProfile(BaseModel):
     rejection_reason = models.TextField(blank=True, null=True)
     stripe_account_id = models.CharField(max_length=100, blank=True, null=True)
     stripe_connected = models.BooleanField(default=False)
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     PLAN_CHOICES = [
         ("starter", "Starter"),
         ("growth", "Growth"),

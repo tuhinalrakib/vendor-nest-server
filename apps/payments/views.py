@@ -255,6 +255,13 @@ class PayoutViewSet(viewsets.ModelViewSet):
 
         # Get payout credentials
         seller = user.seller_profile
+        
+        # Check seller balance
+        if seller.balance < Decimal("50.00"):
+            return Response({"error": "Minimum wallet balance to request a payout is $50.00."}, status=status.HTTP_400_BAD_REQUEST)
+        if amount > seller.balance:
+            return Response({"error": f"Insufficient balance. Your current balance is ${seller.balance}."}, status=status.HTTP_400_BAD_REQUEST)
+
         try:
             settings_obj = seller.payout_settings
         except PayoutSettings.DoesNotExist:
@@ -269,6 +276,10 @@ class PayoutViewSet(viewsets.ModelViewSet):
             payout_dest = settings_obj.wise_iban_or_account
             if not payout_dest:
                 return Response({"error": "Wise account/IBAN configuration is missing."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Lock/Deduct balance
+        seller.balance -= amount
+        seller.save()
 
         # Record payout request
         payout = Payout.objects.create(
@@ -335,5 +346,11 @@ class PayoutDisburseView(views.APIView):
         except Exception as e:
             payout.status = "failed"
             payout.save()
+            
+            # Refund balance
+            seller = payout.seller
+            seller.balance += payout.amount
+            seller.save()
+            
             logger.error(f"Failed to disburse payout: {e}")
             return Response({"error": "Disbursal request failed in sandbox gateways."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
