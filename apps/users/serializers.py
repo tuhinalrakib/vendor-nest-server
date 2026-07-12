@@ -143,5 +143,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 {"detail": "The password you entered is incorrect. Please try again."}
             )
             
+        if not user.is_active and not user.is_email_verified:
+            raise serializers.ValidationError(
+                {"detail": "email_not_verified", "message": "Your email is not verified. Please verify your email first."}
+            )
+            
         return super().validate(attrs)
+
 
