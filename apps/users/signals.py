@@ -60,26 +60,6 @@ def send_verification_email(sender, instance, created, **kwargs):
         frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         activation_link = f"{frontend_url}/verify-email?uid={uid}&token={token}"
         
-        subject = "Verify your email - VendorNest"
-        message = f"Hello {instance.get_full_name()},\n\nPlease verify your email by clicking the link below:\n{activation_link}\n\nThank you!"
-        
-        import threading
-        import logging
-        logger = logging.getLogger(__name__)
-
-        def run_send_mail():
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [instance.email],
-                    fail_silently=False,
-                )
-                logger.info(f"Verification email successfully sent to {instance.email}")
-            except Exception as e:
-                logger.error(f"Failed to send email verification to {instance.email}: {e}")
-
-        # Send email in a separate daemon thread to avoid blocking the main server request-response thread
-        threading.Thread(target=run_send_mail, daemon=True).start()
+        from .utils import send_user_verification_email
+        send_user_verification_email(instance, activation_link)
 

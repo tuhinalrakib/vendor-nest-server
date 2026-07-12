@@ -61,16 +61,8 @@ class ResendVerificationEmailView(APIView):
             frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             activation_link = f"{frontend_url}/verify-email?uid={uid}&token={token}"
             
-            subject = "Verify your email - VendorNest"
-            message = f"Hello {user.get_full_name() or user.username},\n\nPlease verify your email by clicking the link below:\n{activation_link}\n\nThank you!"
-            
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [user.email],
-                fail_silently=False,
-            )
+            from users.utils import send_user_verification_email
+            send_user_verification_email(user, activation_link)
             return Response({"message": f"Verification email successfully sent to {email}."}, status=status.HTTP_200_OK)
         except Exception as e:
             import traceback

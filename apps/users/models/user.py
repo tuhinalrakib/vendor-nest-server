@@ -85,6 +85,15 @@ class User(BaseModel, AbstractUser):
         if self.first_name or self.last_name:
             return f"{self.first_name} {self.last_name}".strip()
         return self.username or self.email.split("@")[0]
+
+    def save(self, *args, **kwargs):
+        if self.role == "admin":
+            self.is_staff = True
+        else:
+            if not self.is_superuser:
+                self.is_staff = False
+        super().save(*args, **kwargs)
+
         
 class UserProfile(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

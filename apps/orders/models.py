@@ -72,28 +72,25 @@ class Order(BaseModel):
                             if seller_profile:
                                 recipient_email = seller_profile.support_email or (seller_profile.user.email if seller_profile.user else None)
                                 if recipient_email:
+                                    from users.utils import send_stock_alert_email
                                     if old_stock > 0 and new_stock == 0:
-                                        try:
-                                            send_mail(
-                                                subject=f"[Alert] Product Out of Stock: {item.product.name}",
-                                                message=f"Hello {seller_profile.shop_name or 'Seller'},\n\nYour product '{item.product.name}' (SKU: {item.product.sku}) is now OUT OF STOCK.\n\nPlease update your stock in the seller inventory panel immediately to resume sales.\n\nBest regards,\nVendorNest Platform",
-                                                from_email=settings.DEFAULT_FROM_EMAIL,
-                                                recipient_list=[recipient_email],
-                                                fail_silently=True
-                                            )
-                                        except Exception as e:
-                                            print(f"Failed to send out of stock email: {e}")
+                                        send_stock_alert_email(
+                                            recipient_email=recipient_email,
+                                            shop_name=seller_profile.shop_name,
+                                            product_name=item.product.name,
+                                            sku=item.product.sku,
+                                            new_stock=new_stock,
+                                            is_out_of_stock=True
+                                        )
                                     elif old_stock >= 8 and 0 < new_stock < 8:
-                                        try:
-                                            send_mail(
-                                                subject=f"[Alert] Low Stock Warning: {item.product.name}",
-                                                message=f"Hello {seller_profile.shop_name or 'Seller'},\n\nYour product '{item.product.name}' (SKU: {item.product.sku}) is running low on stock.\n\nCurrent stock: {new_stock} units (below the 8 units threshold).\n\nPlease restock this item soon.\n\nBest regards,\nVendorNest Platform",
-                                                from_email=settings.DEFAULT_FROM_EMAIL,
-                                                recipient_list=[recipient_email],
-                                                fail_silently=True
-                                            )
-                                        except Exception as e:
-                                            print(f"Failed to send low stock email: {e}")
+                                        send_stock_alert_email(
+                                            recipient_email=recipient_email,
+                                            shop_name=seller_profile.shop_name,
+                                            product_name=item.product.name,
+                                            sku=item.product.sku,
+                                            new_stock=new_stock,
+                                            is_out_of_stock=False
+                                        )
                     stock_updated = True
 
             ledger_updated = False
@@ -105,8 +102,18 @@ class Order(BaseModel):
                         if item.product and item.product.seller:
                             seller_profile = item.product.seller
                             
-                            # Standard SAAS Commission (e.g. 10% platform fee, seller receives 90%)
-                            commission_rate = Decimal("0.10")
+                            # SAAS Commission based on Merchant Plan
+                            from dashboard.saas_config import SaaSSettings
+                            config = SaaSSettings.load()
+                            plan = seller_profile.plan
+                            if plan == "growth":
+                                fee_rate = Decimal(str(config.get("growth_commission_rate", 2.0)))
+                            elif plan == "enterprise":
+                                fee_rate = Decimal(str(config.get("enterprise_commission_rate", 0.5)))
+                            else:  # starter
+                                fee_rate = Decimal(str(config.get("starter_commission_rate", 5.0)))
+                            
+                            commission_rate = fee_rate / Decimal("100.0")
                             item_total = item.price * item.quantity
                             platform_fee = item_total * commission_rate
                             seller_amount = item_total - platform_fee
@@ -128,7 +135,19 @@ class Order(BaseModel):
                     items = self.items.all()
                     
                     # Plain text fallback
-                    message = f"Hello {self.buyer.username},\n\nYour order #{self.id} has been successfully confirmed.\nTotal Amount: ${self.total_amount}\nPayment Method: {self.get_payment_method_display() if self.payment_method else self.get_status_display()}\n\nView details: {frontend_url}/orders\n\nThank you for shopping with VendorNest!"
+                    message = (
+                        f"Hello {self.buyer.username},\n\n"
+                        f"Your order #{self.id} has been successfully confirmed.\n"
+                        f"Total Amount: ${self.total_amount}\n"
+                        f"Payment Method: {self.get_payment_method_display() if self.payment_method else self.get_status_display()}\n\n"
+                        f"View details: {frontend_url}/orders\n\n"
+                        f"Thank you for shopping with VendorNest!\n\n"
+                        f"--\n"
+                        f"VendorNest Inc.\n"
+                        f"123 Tech Avenue, Suite 400\n"
+                        f"Dhaka, Bangladesh 1212\n"
+                        f"support@vendornest.com"
+                    )
                     
                     # Build HTML order items rows and calculate subtotal
                     items_html = ""
@@ -288,7 +307,11 @@ class Order(BaseModel):
                                                 
                                                 <!-- Help footer -->
                                                 <div style="border-top: 1px solid #f4f4f5; padding-top: 24px; text-align: center; font-size: 12px; color: #a1a1aa; line-height: 1.5;">
-                                                    If you have any questions, simply reply to this email. We're here to help!
+                                                    If you have any questions, simply reply to this email. We're here to help!<br><br>
+                                                    <strong>VendorNest Inc.</strong><br>
+                                                    123 Tech Avenue, Suite 400<br>
+                                                    Dhaka, Bangladesh 1212<br>
+                                                    <a href="mailto:support@vendornest.com" style="color: #4f46e5; text-decoration: none;">support@vendornest.com</a>
                                                 </div>
                                             </td>
                                         </tr>

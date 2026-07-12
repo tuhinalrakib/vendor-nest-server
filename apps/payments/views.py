@@ -1,5 +1,7 @@
 from django.conf import settings
 from rest_framework import views, viewsets, permissions, status
+from users.permissions import IsAdmin
+
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
@@ -295,7 +297,7 @@ class PayoutViewSet(viewsets.ModelViewSet):
 
 
 class PayoutDisburseView(views.APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
 
     def post(self, request, pk):
         payout = get_object_or_404(Payout, id=pk)

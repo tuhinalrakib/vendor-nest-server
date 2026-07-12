@@ -39,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
             "role",
             "is_email_verified",
             "is_staff",
+            "is_superuser",
             "is_active",
             "date_joined",
             "profile",
@@ -48,6 +49,7 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "is_email_verified",
             "is_staff",
+            "is_superuser",
             "is_active",
             "date_joined",
         ]
@@ -171,24 +173,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             }, timeout=300)
             
             # Send verification email asynchronously
-            subject = "Admin Login Verification - OTP Code"
-            message = f"Hello {user.get_full_name() or user.username},\n\nA login attempt was made to your admin account on VendorNest.\n\nYour 2FA verification OTP is: {otp}\nThis code is valid for 5 minutes.\n\nIf you did not request this, please secure your account credentials immediately.\n\nBest regards,\nThe VendorNest Team"
-            
-            def send_otp_email():
-                try:
-                    send_mail(
-                        subject,
-                        message,
-                        settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
-                        [user.email],
-                        fail_silently=False
-                    )
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Failed to send admin login OTP email to {user.email}: {e}")
-
-            threading.Thread(target=send_otp_email, daemon=True).start()
+            from .utils import send_admin_otp_email
+            send_admin_otp_email(user, otp, is_resend=False)
             
             return {
                 "otp_required": True,

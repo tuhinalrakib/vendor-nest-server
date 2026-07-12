@@ -48,30 +48,9 @@ def create_seller_application_notification(sender, instance, created, **kwargs):
             )
             
             # 2. Send email to the seller
-            recipient_email = instance.user.email
-            if recipient_email:
-                subject = "Your Seller Application has been Approved! - VendorNest"
-                message_text = (
-                    f"Hello {instance.user.full_name or instance.user.username},\n\n"
-                    f"Congratulations! Your seller application for '{instance.shop_name or 'your shop'}' on VendorNest "
-                    f"has been approved by our administrators.\n\n"
-                    f"You can now access your seller dashboard, manage your store settings, and list products in our catalog.\n"
-                    f"Your store subdomain: {instance.subdomain or 'not-set'}.vendornest.com\n\n"
-                    f"Thank you for choosing VendorNest!\n\n"
-                    f"Best regards,\n"
-                    f"The VendorNest Team"
-                )
-                try:
-                    send_mail(
-                        subject=subject,
-                        message=message_text,
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[recipient_email],
-                        fail_silently=False,
-                    )
-                    logger.info(f"Successfully sent approval email to {recipient_email}")
-                except Exception as e:
-                    logger.error(f"Failed to send approval email to {recipient_email}: {e}")
+            if instance.user.email:
+                from users.utils import send_seller_approval_email
+                send_seller_approval_email(instance.user, instance.shop_name, instance.subdomain)
 
 @receiver(post_save, sender=Payout)
 def create_payout_request_notification(sender, instance, created, **kwargs):

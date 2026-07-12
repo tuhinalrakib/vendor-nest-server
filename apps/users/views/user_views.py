@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from django.core.cache import cache
 from django.contrib.auth import get_user_model
 from ..serializers import UserSerializer, UserUpdateSerializer, UserRegisterSerializer, AdminUserUpdateSerializer
+from ..permissions import IsAdmin
+
 
 User = get_user_model()
 
@@ -41,7 +43,7 @@ class UserProfileView(generics.RetrieveUpdateAPIView):
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
 
     def list(self, request, *args, **kwargs):
         cache_key = 'users_list_cache'
@@ -56,7 +58,7 @@ class UserListView(generics.ListAPIView):
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.IsAuthenticated, IsAdmin]
 
     def get_serializer_class(self):
         if self.request.method in ["PUT", "PATCH"]:

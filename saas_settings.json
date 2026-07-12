@@ -1,0 +1,9 @@
+{
+    "platform_name": "VendorNest Network",
+    "support_email": "eng.tuhin77@gmail.com",
+    "signup_allowed": true,
+    "maintenance_mode": false,
+    "starter_commission_rate": 5.0,
+    "growth_commission_rate": 2.0,
+    "enterprise_commission_rate": 0.5
+}

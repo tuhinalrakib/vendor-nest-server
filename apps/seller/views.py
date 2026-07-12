@@ -1,4 +1,6 @@
 from rest_framework import generics, permissions
+from users.permissions import IsAdmin
+
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from django.core.cache import cache
@@ -41,16 +43,7 @@ class SellerProfileView(generics.RetrieveUpdateAPIView):
 from rest_framework import viewsets
 from .serializers import AdminSellerProfileSerializer
 
-class IsAdmin(permissions.BasePermission):
-    """
-    Allows access only to users with role 'admin' or staff status.
-    """
-    def has_permission(self, request, view):
-        return (
-            request.user and
-            request.user.is_authenticated and
-            (request.user.is_staff or request.user.is_superuser or getattr(request.user, 'role', None) == 'admin')
-        )
+
 
 class AdminSellerProfileViewSet(viewsets.ModelViewSet):
     serializer_class = AdminSellerProfileSerializer

@@ -95,7 +95,8 @@ class VerifyAdminOTPView(APIView):
                     "email": user.email,
                     "username": user.username,
                     "full_name": user.full_name,
-                    "role": user.role
+                    "role": user.role,
+                    "is_superuser": user.is_superuser
                 }
             },
             status=status.HTTP_200_OK
@@ -147,24 +148,8 @@ class ResendAdminOTPView(APIView):
         cache.set(f"admin_otp_{temp_token}", cached_data, timeout=300)
 
         # Send the new OTP email asynchronously
-        subject = "Admin Login Verification - New OTP Code"
-        message = f"Hello {user.get_full_name() or user.username},\n\nYour new 2FA verification OTP is: {new_otp}\nThis code is valid for 5 minutes.\n\nBest regards,\nThe VendorNest Team"
-
-        def send_otp_email():
-            try:
-                send_mail(
-                    subject,
-                    message,
-                    settings.DEFAULT_FROM_EMAIL if hasattr(settings, 'DEFAULT_FROM_EMAIL') else 'noreply@vendornest.com',
-                    [user.email],
-                    fail_silently=False
-                )
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Failed to send admin login OTP resend email to {user.email}: {e}")
-
-        threading.Thread(target=send_otp_email, daemon=True).start()
+        from users.utils import send_admin_otp_email
+        send_admin_otp_email(user, new_otp, is_resend=True)
 
         return Response(
             {"message": "A new verification code has been successfully sent to your email."},
