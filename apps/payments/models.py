@@ -7,7 +7,7 @@ from seller.models import SellerProfile
 class Transaction(BaseModel):
     METHOD_CHOICES = [
         ('stripe', 'Stripe'),
-        ('shurjopay', 'Shurjopay'),
+        ('sslcommerz', 'SSLCommerz'),
         ('cod', 'Cash on Delivery'),
     ]
     STATUS_CHOICES = [

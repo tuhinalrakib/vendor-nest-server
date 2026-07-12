@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     StripeCheckoutSessionView, StripeVerifyView,
-    ShurjopayInitiateView, ShurjopayCallbackView,
+    SSLCommerzInitiateView, SSLCommerzCallbackView,
     CODPaymentView, PayoutSettingsView,
     PayoutViewSet, PayoutDisburseView
 )
@@ -14,8 +14,8 @@ urlpatterns = [
     # Checkout Payments
     path('stripe/create-checkout-session/', StripeCheckoutSessionView.as_view(), name='stripe-checkout-session'),
     path('stripe/verify/', StripeVerifyView.as_view(), name='stripe-verify'),
-    path('shurjopay/initiate/', ShurjopayInitiateView.as_view(), name='shurjopay-initiate'),
-    path('shurjopay/callback/', ShurjopayCallbackView.as_view(), name='shurjopay-callback'),
+    path('sslcommerz/initiate/', SSLCommerzInitiateView.as_view(), name='sslcommerz-initiate'),
+    path('sslcommerz/callback/', SSLCommerzCallbackView.as_view(), name='sslcommerz-callback'),
     path('cod/', CODPaymentView.as_view(), name='cod-payment'),
 
     # Payouts

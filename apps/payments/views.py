@@ -10,7 +10,7 @@ from .serializers import TransactionSerializer, PayoutSerializer, PayoutSettings
 from orders.models import Order
 from seller.models import SellerProfile
 from .gateways.stripe_client import StripeSandboxClient
-from .gateways.shurjopay_client import ShurjopaySandboxClient
+from .gateways.sslcommerz_client import SSLCommerzSandboxClient
 from .gateways.wise_client import WiseSandboxClient
 from .gateways.payoneer_client import PayoneerSandboxClient
 from decimal import Decimal
@@ -92,7 +92,7 @@ class StripeVerifyView(views.APIView):
         return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false")
 
 
-class ShurjopayInitiateView(views.APIView):
+class SSLCommerzInitiateView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
@@ -103,10 +103,11 @@ class ShurjopayInitiateView(views.APIView):
         order = get_object_or_404(Order, id=order_id)
         
         # Initiate payment
-        init_res = ShurjopaySandboxClient.initiate_payment(
+        init_res = SSLCommerzSandboxClient.initiate_payment(
             amount=str(order.total_amount),
-            return_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/",
-            cancel_url=f"{settings.BACKEND_URL}/api/payments/shurjopay/callback/?status=cancel",
+            success_url=f"{settings.BACKEND_URL}/api/payments/sslcommerz/callback/",
+            fail_url=f"{settings.BACKEND_URL}/api/payments/sslcommerz/callback/?status=fail",
+            cancel_url=f"{settings.BACKEND_URL}/api/payments/sslcommerz/callback/?status=cancel",
             order=order
         )
 
@@ -114,59 +115,65 @@ class ShurjopayInitiateView(views.APIView):
         Transaction.objects.create(
             order=order,
             amount=order.total_amount,
-            payment_method='shurjopay',
+            payment_method='sslcommerz',
             status='pending',
-            transaction_id=init_res["sp_tx_id"]
+            transaction_id=init_res["ssl_tx_id"]
         )
 
         return Response({
             "checkout_url": init_res["checkout_url"],
-            "sp_tx_id": init_res["sp_tx_id"]
+            "ssl_tx_id": init_res["ssl_tx_id"]
         })
 
 
-class ShurjopayCallbackView(views.APIView):
+class SSLCommerzCallbackView(views.APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        query_string = request.META.get('QUERY_STRING', '')
-        # Handle cases like ?status=cancel?order_id=XXX by converting all '?' to '&'
-        normalized_query = query_string.replace('?', '&')
-        from django.http import QueryDict
-        params = QueryDict(normalized_query)
+        return self.handle_callback(request, request.query_params, query_status=request.query_params.get("status"))
 
-        sp_tx_id = params.get("order_id") or params.get("sp_tx_id")
-        status_param = params.get("status")
+    def post(self, request):
+        return self.handle_callback(request, request.data, query_status=request.query_params.get("status"))
 
-        if not sp_tx_id:
-            logger.error("Shurjopay callback error: Transaction ID is missing.")
+    def handle_callback(self, request, data, query_status=None):
+        ssl_tx_id = data.get("tran_id")
+        val_id = data.get("val_id")
+        status_param = query_status or data.get("status")
+
+        if status_param in ["fail", "cancel", "FAILED", "CANCELLED"]:
+            if ssl_tx_id:
+                try:
+                    tx = Transaction.objects.get(transaction_id=ssl_tx_id)
+                    tx.status = "failed"
+                    tx.save()
+                except Transaction.DoesNotExist:
+                    pass
+            return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&payment_status={status_param}")
+
+        if not ssl_tx_id:
+            logger.error("SSLCommerz callback error: Transaction ID is missing.")
             return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&error=missing_transaction_id")
 
         try:
-            tx = Transaction.objects.get(transaction_id=sp_tx_id)
+            tx = Transaction.objects.get(transaction_id=ssl_tx_id)
         except Transaction.DoesNotExist:
-            logger.error(f"Shurjopay callback error: Transaction not found for ID {sp_tx_id}")
+            logger.error(f"SSLCommerz callback error: Transaction not found for ID {ssl_tx_id}")
             return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&error=transaction_not_found")
 
-        if status_param == "cancel":
-            tx.status = "failed"
-            tx.save()
-            return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false&payment_status=cancel")
+        # Verify transaction with SSLCommerz API
+        if val_id:
+            res = SSLCommerzSandboxClient.verify_payment(val_id)
+            if res.get("status") == "success":
+                tx.status = "completed"
+                tx.save()
+                
+                # Mark order paid
+                order = tx.order
+                order.status = "paid"
+                order.save()
+                
+                return redirect(f"{settings.FRONTEND_URL}/order-success?type=sslcommerz&order_id={order.id}")
 
-        # Verify transaction
-        res = ShurjopaySandboxClient.verify_payment(sp_tx_id)
-        if res.get("status") == "success":
-            tx.status = "completed"
-            tx.save()
-            
-            # Mark order paid
-            order = tx.order
-            order.status = "paid"
-            order.save()
-            
-            # Redirect back to the frontend success landing area
-            return redirect(f"{settings.FRONTEND_URL}/order-success?type=shurjopay&order_id={order.id}")
-            
         tx.status = "failed"
         tx.save()
         return redirect(f"{settings.FRONTEND_URL}/checkout?checkout_success=false")

@@ -18,7 +18,7 @@ class Order(BaseModel):
 
     PAYMENT_METHOD_CHOICES = [
         ("stripe", "Stripe"),
-        ("shurjopay", "Shurjopay"),
+        ("sslcommerz", "SSLCommerz"),
         ("cod", "Cash on Delivery"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
