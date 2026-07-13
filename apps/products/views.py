@@ -124,8 +124,9 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
         seller_profile = getattr(user, 'seller_profile', None)
-        if seller_profile:
+        if not is_admin and seller_profile:
             if seller_profile.plan == 'starter':
                 product_count = Product.objects.filter(seller=seller_profile).count()
                 if product_count >= 15:

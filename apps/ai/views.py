@@ -44,7 +44,8 @@ class ProductDescriptionView(APIView):
 
     def post(self, request):
         user = request.user
-        if hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin and hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
             return Response(
                 {"error": "AI features are not available on the Starter plan. Please upgrade to Growth or Enterprise to unlock AI description generation."},
                 status=status.HTTP_403_FORBIDDEN
@@ -100,7 +101,8 @@ class ProductSEOView(APIView):
 
     def post(self, request):
         user = request.user
-        if hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin and hasattr(user, 'seller_profile') and user.seller_profile.plan == 'starter':
             return Response(
                 {"error": "AI tools are not available on the Starter plan. Please upgrade to Growth or Enterprise to unlock AI SEO generator."},
                 status=status.HTTP_403_FORBIDDEN
@@ -472,7 +474,8 @@ class StoreDescriptionView(APIView):
 
     def post(self, request):
         user = request.user
-        if user.role == 'seller':
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin and user.role == 'seller':
             seller_profile = getattr(user, 'seller_profile', None)
             if seller_profile and seller_profile.plan == 'starter':
                 return Response(
