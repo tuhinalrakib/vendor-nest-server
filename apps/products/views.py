@@ -251,10 +251,17 @@ class ProductViewSet(viewsets.ModelViewSet):
         try:
             seller_profile = user.seller_profile
         except SellerProfile.DoesNotExist:
-            seller_profile, _ = SellerProfile.objects.get_or_create(
-                user=user,
-                defaults={"shop_name": "Platform Direct (Admin)", "subdomain": "platform-direct", "status": "approved"}
-            )
+            seller_profile = SellerProfile.objects.filter(user=user).first()
+            if not seller_profile:
+                subdomain = "platform-direct"
+                if SellerProfile.objects.filter(subdomain=subdomain).exists():
+                    subdomain = f"platform-direct-{user.id}"
+                seller_profile = SellerProfile.objects.create(
+                    user=user,
+                    shop_name="Platform Direct (Admin)",
+                    subdomain=subdomain,
+                    status="approved"
+                )
             
         file_data = csv_file.read().decode('utf-8')
         io_string = io.StringIO(file_data)

@@ -28,11 +28,11 @@ class Product(BaseModel):
     seo_title = models.CharField(max_length=255, blank=True, null=True)
     seo_description = models.TextField(blank=True, null=True)
     tags = models.TextField(blank=True, null=True)  # Comma separated tags
-    image = models.ImageField(upload_to="products/", blank=True, null=True)
+    image = models.ImageField(upload_to="products/", max_length=500, blank=True, null=True)
 
     # Digital Product Fields
     is_digital = models.BooleanField(default=False)
-    digital_file = models.FileField(upload_to="digital_products/", blank=True, null=True)
+    digital_file = models.FileField(upload_to="digital_products/", max_length=500, blank=True, null=True)
     digital_file_url = models.URLField(blank=True, null=True)
     license_keys = models.TextField(blank=True, null=True, help_text="New-line separated pre-generated keys")
 

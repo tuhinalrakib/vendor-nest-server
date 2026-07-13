@@ -157,14 +157,17 @@ class ProductSerializer(serializers.ModelSerializer):
 
         # Determine seller profile dynamically based on request user
         if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
-            seller_profile, _ = SellerProfile.objects.get_or_create(
-                user=user,
-                defaults={
-                    "shop_name": "Platform Direct (Admin)",
-                    "subdomain": "platform-direct",
-                    "status": "approved"
-                }
-            )
+            seller_profile = SellerProfile.objects.filter(user=user).first()
+            if not seller_profile:
+                subdomain = "platform-direct"
+                if SellerProfile.objects.filter(subdomain=subdomain).exists():
+                    subdomain = f"platform-direct-{user.id}"
+                seller_profile = SellerProfile.objects.create(
+                    user=user,
+                    shop_name="Platform Direct (Admin)",
+                    subdomain=subdomain,
+                    status="approved"
+                )
             validated_data['approval_status'] = 'approved'
         else:
             try:
