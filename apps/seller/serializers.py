@@ -16,11 +16,12 @@ class SellerProfileSerializer(serializers.ModelSerializer):
             "rejection_reason",
             "stripe_account_id",
             "stripe_connected",
+            "balance",
             "plan",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "status", "rejection_reason", "created_at", "updated_at"]
+        read_only_fields = ["id", "status", "rejection_reason", "balance", "created_at", "updated_at"]
 
     def validate(self, attrs):
         subdomain = attrs.get('subdomain')
@@ -57,8 +58,9 @@ class AdminSellerProfileSerializer(serializers.ModelSerializer):
             "rejection_reason",
             "stripe_account_id",
             "stripe_connected",
+            "balance",
             "plan",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "owner_name", "email", "created_at", "updated_at"]
+        read_only_fields = ["id", "owner_name", "email", "balance", "created_at", "updated_at"]

@@ -346,6 +346,19 @@ class PayoutDisburseView(views.APIView):
                 payout.status = "completed"
 
             payout.save()
+
+            # Notify seller of success
+            try:
+                from notifications.models import Notification
+                Notification.objects.create(
+                    recipient=payout.seller.user,
+                    title="Withdrawal Successful",
+                    message=f"Your payout request of ${payout.amount} has been processed successfully via {payout.payout_method.upper()}.",
+                    notification_type="general"
+                )
+            except Exception as e_notif:
+                logger.error(f"Failed to create payout success notification: {e_notif}")
+
             return Response({
                 "status": "success",
                 "message": f"Disbursed ${payout.amount} successfully.",
@@ -360,6 +373,18 @@ class PayoutDisburseView(views.APIView):
             seller = payout.seller
             seller.balance += payout.amount
             seller.save()
+
+            # Notify seller of failure
+            try:
+                from notifications.models import Notification
+                Notification.objects.create(
+                    recipient=seller.user,
+                    title="Withdrawal Failed",
+                    message=f"Your payout request of ${payout.amount} via {payout.payout_method.upper()} has failed. The funds have been refunded to your wallet.",
+                    notification_type="general"
+                )
+            except Exception as e_notif:
+                logger.error(f"Failed to create payout failure notification: {e_notif}")
             
             logger.error(f"Failed to disburse payout: {e}")
             return Response({"error": "Disbursal request failed in sandbox gateways."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

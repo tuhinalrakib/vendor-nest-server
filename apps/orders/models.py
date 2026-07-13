@@ -118,30 +118,39 @@ class Order(BaseModel):
             if not self.ledger_credited:
                 items = self.items.all()
                 if items.exists():
-                    from decimal import Decimal
-                    for item in items:
-                        if item.product and item.product.seller:
-                            seller_profile = item.product.seller
-                            
-                            # SAAS Commission based on Merchant Plan
-                            from dashboard.saas_config import SaaSSettings
-                            config = SaaSSettings.load()
-                            plan = seller_profile.plan
-                            if plan == "growth":
-                                fee_rate = Decimal(str(config.get("growth_commission_rate", 2.0)))
-                            elif plan == "enterprise":
-                                fee_rate = Decimal(str(config.get("enterprise_commission_rate", 0.5)))
-                            else:  # starter
-                                fee_rate = Decimal(str(config.get("starter_commission_rate", 5.0)))
-                            
-                            commission_rate = fee_rate / Decimal("100.0")
-                            item_total = item.price * item.quantity
-                            platform_fee = item_total * commission_rate
-                            seller_amount = item_total - platform_fee
-                            
-                            seller_profile.balance += seller_amount
-                            seller_profile.save()
-                    ledger_updated = True
+                    # For COD, only credit ledger when status is 'delivered'.
+                    # For online payment (Stripe/SSLCommerz), credit when status is 'paid' or 'delivered'.
+                    should_credit = False
+                    if self.payment_method == "cod":
+                        should_credit = (self.status == "delivered")
+                    else:
+                        should_credit = (self.status in ["paid", "delivered"])
+
+                    if should_credit:
+                        from decimal import Decimal
+                        for item in items:
+                            if item.product and item.product.seller:
+                                seller_profile = item.product.seller
+                                
+                                # SAAS Commission based on Merchant Plan
+                                from dashboard.saas_config import SaaSSettings
+                                config = SaaSSettings.load()
+                                plan = seller_profile.plan
+                                if plan == "growth":
+                                    fee_rate = Decimal(str(config.get("growth_commission_rate", 2.0)))
+                                elif plan == "enterprise":
+                                    fee_rate = Decimal(str(config.get("enterprise_commission_rate", 0.5)))
+                                else:  # starter
+                                    fee_rate = Decimal(str(config.get("starter_commission_rate", 5.0)))
+                                
+                                commission_rate = fee_rate / Decimal("100.0")
+                                item_total = item.price * item.quantity
+                                platform_fee = item_total * commission_rate
+                                seller_amount = item_total - platform_fee
+                                
+                                seller_profile.balance += seller_amount
+                                seller_profile.save()
+                        ledger_updated = True
                 
             email_updated = False
             if not self.email_sent:
@@ -369,30 +378,41 @@ class Order(BaseModel):
                                     seller_items[item.product.seller].append(item)
                             
                             for seller, s_items in seller_items.items():
+                                # Build text and HTML for the products
+                                items_text = ""
+                                items_html_rows = ""
+                                seller_subtotal = 0.00
+                                
+                                for s_item in s_items:
+                                    item_price = float(s_item.price)
+                                    item_subtotal = item_price * s_item.quantity
+                                    seller_subtotal += item_subtotal
+                                    items_text += f"- {s_item.product.name} (Qty: {s_item.quantity}) - ${item_price:.2f} each\n"
+                                    items_html_rows += f"""
+                                    <tr>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: left; font-size: 13px; color: #27272a;">{s_item.product.name}</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: center; font-size: 13px; color: #27272a;">{s_item.quantity}</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-size: 13px; color: #27272a;">${item_price:.2f}</td>
+                                        <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-weight: bold; font-size: 13px; color: #18181b;">${item_subtotal:.2f}</td>
+                                    </tr>
+                                    """
+
+                                # Create in-app notification for the seller
+                                try:
+                                    from notifications.models import Notification
+                                    Notification.objects.create(
+                                        recipient=seller.user,
+                                        title="New Order Received",
+                                        message=f"You have received a new order #{self.id} for ${seller_subtotal:.2f}. Please review details and process fulfillment.",
+                                        notification_type="general"
+                                    )
+                                except Exception as e_notif:
+                                    print(f"Failed to create seller order notification: {e_notif}")
+
                                 recipient_email = seller.support_email or (seller.user.email if seller.user else None)
                                 if recipient_email:
                                     try:
                                         seller_subject = f"[New Order Alert] Order #{self.id} - Action Required"
-                                        
-                                        # Build text and HTML for the products
-                                        items_text = ""
-                                        items_html_rows = ""
-                                        seller_subtotal = 0.00
-                                        
-                                        for s_item in s_items:
-                                            item_price = float(s_item.price)
-                                            item_subtotal = item_price * s_item.quantity
-                                            seller_subtotal += item_subtotal
-                                            items_text += f"- {s_item.product.name} (Qty: {s_item.quantity}) - ${item_price:.2f} each\n"
-                                            
-                                            items_html_rows += f"""
-                                            <tr>
-                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: left; font-size: 13px; color: #27272a;">{s_item.product.name}</td>
-                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: center; font-size: 13px; color: #27272a;">{s_item.quantity}</td>
-                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-size: 13px; color: #27272a;">${item_price:.2f}</td>
-                                                <td style="padding: 10px; border-bottom: 1px solid #e4e4e7; text-align: right; font-weight: bold; font-size: 13px; color: #18181b;">${item_subtotal:.2f}</td>
-                                            </tr>
-                                            """
                                         
                                         seller_message = (
                                             f"Hello {seller.shop_name or 'Seller'},\n\n"
