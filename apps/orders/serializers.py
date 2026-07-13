@@ -5,10 +5,31 @@ from products.models import Product
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
     seller_shop = serializers.ReadOnlyField(source='product.seller.shop_name')
+    is_digital = serializers.BooleanField(source='product.is_digital', read_only=True)
+    digital_file_url = serializers.SerializerMethodField()
+    license_key = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
-        fields = ['id', 'product', 'product_name', 'seller_shop', 'quantity', 'price']
+        fields = [
+            'id', 'product', 'product_name', 'seller_shop', 'quantity', 'price',
+            'is_digital', 'digital_file_url', 'license_key'
+        ]
+
+    def get_digital_file_url(self, obj):
+        if obj.product and obj.product.is_digital:
+            if obj.product.digital_file:
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(obj.product.digital_file.url)
+                return obj.product.digital_file.url
+            return obj.product.digital_file_url
+        return None
+
+    def get_license_key(self, obj):
+        if hasattr(obj, 'license_key') and obj.license_key:
+            return obj.license_key.key
+        return None
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)

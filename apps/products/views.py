@@ -2,8 +2,12 @@ from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from django.core.cache import cache
-from .models import Product
+from django.db import models
+from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from .models import Product, ProductVersion, ProductLicenseKey
 from .serializers import ProductSerializer
 from seller.permissions import IsApprovedSeller
 
@@ -100,16 +104,23 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Product.objects.select_related('seller', 'category', 'seller__user')
-        if not user or not user.is_authenticated:
-            return queryset.filter(seller__status="approved")
-            
-        if user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
+        
+        # Admin / Superuser see all products
+        if user and user.is_authenticated and (user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')):
             return queryset.all()
             
-        if hasattr(user, 'role') and user.role == 'seller':
+        # Sellers see only their own products
+        if user and user.is_authenticated and hasattr(user, 'role') and user.role == 'seller':
             return queryset.filter(seller__user=user)
             
-        return queryset.filter(seller__status="approved")
+        # Visitors / Customers see approved seller's approved and published products
+        now = timezone.now()
+        return queryset.filter(
+            seller__status="approved",
+            approval_status="approved"
+        ).filter(
+            models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
+        )
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -136,6 +147,183 @@ class ProductViewSet(viewsets.ModelViewSet):
         from .signals import invalidate_product_cache
         invalidate_product_cache(sender=Product, instance=instance)
 
+    # 1. Product Approval Workflow: Approve
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def approve(self, request, pk=None):
+        user = request.user
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin:
+            return Response({"error": "Only administrators can approve products."}, status=status.HTTP_403_FORBIDDEN)
+            
+        product = self.get_object()
+        product.approval_status = 'approved'
+        product._changed_by = user
+        product.save()
+        
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=product)
+        return Response({"message": "Product approved successfully.", "status": "approved"})
+
+    # 2. Product Approval Workflow: Reject
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def reject(self, request, pk=None):
+        user = request.user
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin:
+            return Response({"error": "Only administrators can reject products."}, status=status.HTTP_403_FORBIDDEN)
+            
+        product = self.get_object()
+        product.approval_status = 'rejected'
+        product._changed_by = user
+        product.save()
+        
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=product)
+        return Response({"message": "Product rejected successfully.", "status": "rejected"})
+
+    # 3. Product Version History Log Viewer
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
+    def versions(self, request, pk=None):
+        product = self.get_object()
+        user = request.user
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        is_owner = hasattr(user, 'role') and user.role == 'seller' and product.seller.user == user
+        
+        if not is_admin and not is_owner:
+            return Response({"error": "Unauthorized to view version logs for this product."}, status=status.HTTP_403_FORBIDDEN)
+            
+        from .serializers import ProductVersionSerializer
+        versions = product.versions.all().order_by('-version_number')
+        serializer = ProductVersionSerializer(versions, many=True)
+        return Response(serializer.data)
+
+    # 4. Bulk CSV Export Action
+    @action(detail=False, methods=['get'], url_path='bulk-export', permission_classes=[permissions.IsAuthenticated])
+    def bulk_export(self, request):
+        import csv
+        from django.http import HttpResponse
+        
+        products = self.get_queryset()
+        
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="vendornest_products_export.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow([
+            'id', 'name', 'category', 'sku', 'price', 'compare_at_price', 
+            'stock', 'low_stock_threshold', 'description', 'is_digital', 
+            'digital_file_url', 'license_keys', 'name_bn', 'description_bn'
+        ])
+        
+        for p in products:
+            writer.writerow([
+                str(p.id),
+                p.name,
+                p.category.name if p.category else '',
+                p.sku or '',
+                float(p.price),
+                float(p.compare_at_price) if p.compare_at_price else '',
+                p.stock,
+                p.low_stock_threshold,
+                p.description or '',
+                p.is_digital,
+                p.digital_file_url or '',
+                p.license_keys or '',
+                p.name_bn or '',
+                p.description_bn or ''
+            ])
+            
+        return response
+
+    # 5. Bulk CSV Import Action
+    @action(detail=False, methods=['post'], url_path='bulk-import', permission_classes=[permissions.IsAuthenticated])
+    def bulk_import(self, request):
+        import csv
+        import io
+        from categories.models import Category
+        from seller.models import SellerProfile
+        
+        csv_file = request.FILES.get('file')
+        if not csv_file:
+            return Response({"error": "No CSV file provided under 'file' key."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user = request.user
+        try:
+            seller_profile = user.seller_profile
+        except SellerProfile.DoesNotExist:
+            seller_profile, _ = SellerProfile.objects.get_or_create(
+                user=user,
+                defaults={"shop_name": "Platform Direct (Admin)", "subdomain": "platform-direct", "status": "approved"}
+            )
+            
+        file_data = csv_file.read().decode('utf-8')
+        io_string = io.StringIO(file_data)
+        reader = csv.DictReader(io_string)
+        
+        created_count = 0
+        skipped_count = 0
+        errors = []
+        
+        for idx, row in enumerate(reader):
+            name = row.get('name')
+            if not name:
+                errors.append(f"Row {idx+1}: Missing required field 'name'.")
+                skipped_count += 1
+                continue
+                
+            try:
+                cat_name = row.get('category')
+                category = None
+                if cat_name:
+                    category, _ = Category.objects.get_or_create(name=cat_name.strip())
+                    
+                price = float(row.get('price', 0))
+                compare_at_price = row.get('compare_at_price')
+                compare_at_price = float(compare_at_price) if compare_at_price else None
+                
+                stock = int(row.get('stock', 0))
+                low_stock_threshold = int(row.get('low_stock_threshold', 10))
+                is_digital = row.get('is_digital', 'false').lower() in ['true', '1', 'yes']
+                
+                product = Product.objects.create(
+                    seller=seller_profile,
+                    category=category,
+                    name=name.strip(),
+                    sku=row.get('sku', '').strip() or None,
+                    price=price,
+                    compare_at_price=compare_at_price,
+                    stock=stock,
+                    low_stock_threshold=low_stock_threshold,
+                    description=row.get('description', ''),
+                    is_digital=is_digital,
+                    digital_file_url=row.get('digital_file_url', ''),
+                    license_keys=row.get('license_keys', ''),
+                    name_bn=row.get('name_bn', ''),
+                    description_bn=row.get('description_bn', ''),
+                    approval_status='approved' if (user.is_staff or user.is_superuser) else 'pending'
+                )
+                
+                if is_digital and product.license_keys:
+                    keys = [k.strip() for k in product.license_keys.split('\n') if k.strip()]
+                    for key in keys:
+                        ProductLicenseKey.objects.create(product=product, key=key)
+                        
+                created_count += 1
+            except Exception as e:
+                errors.append(f"Row {idx+1}: {str(e)}")
+                skipped_count += 1
+                
+        # Trigger cache invalidation via version increment
+        from django.db.models.signals import post_save
+        post_save.send(sender=Product, instance=Product(), created=True)
+        
+        return Response({
+            "message": "Bulk import completed.",
+            "created": created_count,
+            "skipped": skipped_count,
+            "errors": errors
+        }, status=status.HTTP_200_OK)
+
 
 class CartView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -145,7 +333,6 @@ class CartView(APIView):
         cart_key = f"cart_{user_id}"
         cart_items = cache.get(cart_key, {})
         
-        # If action=count is passed:
         action = request.query_params.get("action")
         if action == "count":
             total_items = sum(cart_items.values())
@@ -192,13 +379,10 @@ class CartView(APIView):
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        # Get existing cart
         cart_items = cache.get(cart_key, {})
-        # Increment quantity
         cart_items[product_id] = cart_items.get(product_id, 0) + quantity
-        cache.set(cart_key, cart_items, 86400 * 30) # Save cart for 30 days
+        cache.set(cart_key, cart_items, 86400 * 30)
         
-        # Return total cart items count
         total_items = sum(cart_items.values())
         return Response({
             "message": "Product added to cart",
@@ -246,7 +430,6 @@ class CartView(APIView):
         except ValueError:
             return Response({"error": "quantity must be a non-negative integer"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Get existing cart
         cart_items = cache.get(cart_key, {})
 
         if quantity == 0:
@@ -293,4 +476,3 @@ class CloudinarySignatureView(APIView):
             'api_key': api_key,
             'folder': 'vendor_nest'
         })
-

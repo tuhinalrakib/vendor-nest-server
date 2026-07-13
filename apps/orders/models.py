@@ -62,35 +62,56 @@ class Order(BaseModel):
                     from django.conf import settings
                     for item in items:
                         if item.product:
-                            old_stock = item.product.stock
-                            new_stock = max(0, old_stock - item.quantity)
-                            item.product.stock = new_stock
-                            item.product.save()
+                            # Handle Digital License Key Assignment
+                            if item.product.is_digital:
+                                from products.models import ProductLicenseKey
+                                available_keys = ProductLicenseKey.objects.filter(product=item.product, is_assigned=False)[:item.quantity]
+                                for key_obj in available_keys:
+                                    key_obj.is_assigned = True
+                                    key_obj.assigned_to_order_item = item
+                                    key_obj.save()
+                                
+                                keys_found = len(available_keys)
+                                if keys_found < item.quantity:
+                                    import uuid
+                                    for _ in range(item.quantity - keys_found):
+                                        ProductLicenseKey.objects.create(
+                                            product=item.product,
+                                            key=f"LIC-{uuid.uuid4().hex[:16].upper()}",
+                                            is_assigned=True,
+                                            assigned_to_order_item=item
+                                        )
+                            # Handle Physical Product Stock
+                            else:
+                                old_stock = item.product.stock
+                                new_stock = max(0, old_stock - item.quantity)
+                                item.product.stock = new_stock
+                                item.product.save()
 
-                            # Trigger email alerts on transitions
-                            seller_profile = item.product.seller
-                            if seller_profile:
-                                recipient_email = seller_profile.support_email or (seller_profile.user.email if seller_profile.user else None)
-                                if recipient_email:
-                                    from users.utils import send_stock_alert_email
-                                    if old_stock > 0 and new_stock == 0:
-                                        send_stock_alert_email(
-                                            recipient_email=recipient_email,
-                                            shop_name=seller_profile.shop_name,
-                                            product_name=item.product.name,
-                                            sku=item.product.sku,
-                                            new_stock=new_stock,
-                                            is_out_of_stock=True
-                                        )
-                                    elif old_stock >= 8 and 0 < new_stock < 8:
-                                        send_stock_alert_email(
-                                            recipient_email=recipient_email,
-                                            shop_name=seller_profile.shop_name,
-                                            product_name=item.product.name,
-                                            sku=item.product.sku,
-                                            new_stock=new_stock,
-                                            is_out_of_stock=False
-                                        )
+                                # Trigger email alerts on transitions
+                                seller_profile = item.product.seller
+                                if seller_profile:
+                                    recipient_email = seller_profile.support_email or (seller_profile.user.email if seller_profile.user else None)
+                                    if recipient_email:
+                                        from users.utils import send_stock_alert_email
+                                        if old_stock > 0 and new_stock == 0:
+                                            send_stock_alert_email(
+                                                recipient_email=recipient_email,
+                                                shop_name=seller_profile.shop_name,
+                                                product_name=item.product.name,
+                                                sku=item.product.sku,
+                                                new_stock=new_stock,
+                                                is_out_of_stock=True
+                                            )
+                                        elif old_stock >= item.product.low_stock_threshold and 0 < new_stock < item.product.low_stock_threshold:
+                                            send_stock_alert_email(
+                                                recipient_email=recipient_email,
+                                                shop_name=seller_profile.shop_name,
+                                                product_name=item.product.name,
+                                                sku=item.product.sku,
+                                                new_stock=new_stock,
+                                                is_out_of_stock=False
+                                            )
                     stock_updated = True
 
             ledger_updated = False
