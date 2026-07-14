@@ -65,20 +65,10 @@ class ProductDescriptionView(APIView):
         )
 
         if not has_gemini or not api_key:
-            # Fallback mock response if API Key is not set
-            mock_desc = (
-                f"Introducing the all-new <strong>{name}</strong>!<br/><br/>"
-                f"Designed specifically for enthusiasts in the {category} space, this product combines "
-                f"cutting-edge design with state-of-the-art functionality. Whether you're upgrading your daily routine "
-                f"or buying it as a gift, it delivers exceptional value.<br/><br/>"
-                f"<strong>Key Features:</strong>"
-                f"<ul>"
-                f"  <li><strong>Premium Build Quality:</strong> Crafted using top-grade materials for ultimate durability.</li>"
-                f"  <li><strong>Exceptional Performance:</strong> Optimized to deliver outstanding results every time.</li>"
-                f"  <li><strong>Modern Design:</strong> Sleek aesthetics that fit seamlessly into any setup.</li>"
-                f"</ul>"
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            return Response({"content": mock_desc})
 
         try:
             try:
@@ -93,7 +83,13 @@ class ProductDescriptionView(APIView):
                     response = model.generate_content(prompt)
             return Response({"content": response.text.strip()})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in ProductDescriptionView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ProductSEOView(APIView):
@@ -123,14 +119,10 @@ class ProductSEOView(APIView):
         )
 
         if not has_gemini or not api_key:
-            # Fallback mock response
-            clean_name = name[:40]
-            mock_seo = {
-                "meta_title": f"Buy {clean_name} Online - Best Prices & Quality | VendorNest",
-                "meta_description": f"Purchase the high-quality {clean_name} today. Browse our selection of {category} products with fast shipping and secure payments.",
-                "tags": [category.lower(), name.lower().split()[0], "premium", "trending", "shop"]
-            }
-            return Response(mock_seo)
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             try:
@@ -149,11 +141,13 @@ class ProductSEOView(APIView):
             parsed_json = json.loads(cleaned_text)
             return Response(parsed_json)
         except Exception as e:
-            return Response({
-                "meta_title": f"Buy {name} - Best deals | VendorNest",
-                "meta_description": f"Purchase {name} in {category} category today. High quality and top customer ratings.",
-                "tags": [category.lower(), "shop", "sale"]
-            })
+            err_msg = str(e)
+            print(f"Gemini error in ProductSEOView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ReviewSummaryView(APIView):
@@ -184,17 +178,10 @@ class ReviewSummaryView(APIView):
         )
 
         if not has_gemini or not api_key:
-            mock_summary = (
-                "<strong>Customer Consensus:</strong> Highly positive. Customers love the sound clarity and exceptional battery life, though some note it is on the pricier side.<br/><br/>"
-                "<strong>Pros:</strong><br/>"
-                "• Crisp and clear audio output<br/>"
-                "• All-day battery endurance<br/>"
-                "• Durable build quality<br/><br/>"
-                "<strong>Cons:</strong><br/>"
-                "• Higher price point than competitors<br/>"
-                "• Noise cancellation could be stronger in noisy environments"
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            return Response({"summary": mock_summary})
 
         try:
             try:
@@ -209,7 +196,13 @@ class ReviewSummaryView(APIView):
                     response = model.generate_content(prompt)
             return Response({"summary": response.text.strip()})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in ReviewSummaryView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CategoryDescriptionView(APIView):
@@ -227,9 +220,10 @@ class CategoryDescriptionView(APIView):
         )
 
         if not has_gemini or not api_key:
-            # Fallback mock description
-            mock_desc = f"Explore our exclusive collection of high-quality products in the {name} category. Discover top-rated items, curated selections, and great deals to suit your needs."
-            return Response({"description": mock_desc})
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             try:
@@ -244,7 +238,13 @@ class CategoryDescriptionView(APIView):
                     response = model.generate_content(prompt)
             return Response({"description": response.text.strip()})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in CategoryDescriptionView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ProductRecommendationView(APIView):
@@ -296,31 +296,10 @@ class ProductRecommendationView(APIView):
         )
 
         if not has_gemini or not api_key:
-            # Fallback mock recommendations
-            mock_recs = [
-                {
-                    "id": "rec-2",
-                    "name": "USB-C Hub Multi-port 8-in-1",
-                    "category": "Electronics",
-                    "price": 49.99,
-                    "reason": "Perfect companion to connect your wireless headphone transmitter and keep your laptop ports free."
-                },
-                {
-                    "id": "rec-3",
-                    "name": "Wireless Mechanical Keyboard",
-                    "category": "Electronics",
-                    "price": 89.99,
-                    "reason": "Complete your quiet workspace setup with this high-performance wireless mechanical keyboard."
-                },
-                {
-                    "id": "rec-5",
-                    "name": "LED Smart Desk Lamp",
-                    "category": "Home & Kitchen",
-                    "price": 34.99,
-                    "reason": "Provides focus lighting to enhance productivity while listening to music with your headphones."
-                }
-            ]
-            return Response(mock_recs)
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             try:
@@ -338,7 +317,13 @@ class ProductRecommendationView(APIView):
             parsed_json = json.loads(cleaned_text)
             return Response(parsed_json)
         except Exception as e:
-            return Response(catalog[:3])
+            err_msg = str(e)
+            print(f"Gemini error in ProductRecommendationView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SalesForecastView(APIView):
@@ -362,17 +347,10 @@ class SalesForecastView(APIView):
         )
 
         if not has_gemini or not api_key:
-            mock_forecast = {
-                "forecast": [
-                    {"week": "Week 5", "predicted_revenue": 10500.0},
-                    {"week": "Week 6", "predicted_revenue": 11800.0},
-                    {"week": "Week 7", "predicted_revenue": 13200.0},
-                    {"week": "Week 8", "predicted_revenue": 15000.0},
-                ],
-                "insights": "Sales have shown strong upward momentum, growing at approximately 30% week-over-week. This indicates strong product-market fit or seasonality.",
-                "recommendations": "Ensure you restock top electronics categories immediately. Consider launching a retargeting campaign for Week 6 to sustain the momentum."
-            }
-            return Response(mock_forecast)
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             try:
@@ -390,7 +368,13 @@ class SalesForecastView(APIView):
             parsed_json = json.loads(cleaned_text)
             return Response(parsed_json)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in SalesForecastView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class AIChatSupportView(APIView):
@@ -434,24 +418,10 @@ class AIChatSupportView(APIView):
         )
 
         if not has_gemini or not api_key:
-            answer = "I'd be glad to help! "
-            m_lower = message.lower()
-            
-            # Look for keyword match in the database product list
-            matched_product = None
-            for item in catalog:
-                name_words = [w.lower() for w in item["name"].split() if len(w) > 3]
-                if item["name"].lower() in m_lower or any(word in m_lower for word in name_words):
-                    matched_product = item
-                    break
-            
-            if matched_product:
-                answer += f"Our {matched_product['name']} ({matched_product['price']}) is a great choice. Details: {matched_product['features']}."
-            else:
-                product_names = [item["name"] for item in catalog[:4]]
-                answer += f"We have several amazing products in our store, including {', '.join(product_names)}. Let me know if you would like pricing or detail information about any of these!"
-            
-            return Response({"reply": answer})
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
             try:
@@ -466,7 +436,13 @@ class AIChatSupportView(APIView):
                     response = model.generate_content(prompt)
             return Response({"reply": response.text.strip()})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in AIChatSupportView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class StoreDescriptionView(APIView):
@@ -497,13 +473,10 @@ class StoreDescriptionView(APIView):
         )
 
         if not has_gemini or not api_key:
-            mock_desc = (
-                f"Welcome to {name}, your premier destination for high-quality products and exceptional service. "
-                f"We are dedicated to bringing you the best selection of curated goods designed to elevate your everyday lifestyle. "
-                f"With a focus on reliability, premium quality, and customer satisfaction, we strive to deliver an unparalleled shopping experience. "
-                f"Thank you for choosing us as your trusted shopping partner!"
+            return Response(
+                {"error": "Gemini configuration error: Google Generative AI library is missing or GEMINI_API_KEY is not set."},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            return Response({"description": mock_desc})
 
         try:
             try:
@@ -518,4 +491,10 @@ class StoreDescriptionView(APIView):
                     response = model.generate_content(prompt)
             return Response({"description": response.text.strip()})
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            err_msg = str(e)
+            print(f"Gemini error in StoreDescriptionView: {err_msg}")
+            if "429" in err_msg or "quota" in err_msg.lower() or "limit" in err_msg.lower() or "resourceexhausted" in err_msg.lower():
+                return Response({
+                    "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
+                }, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
