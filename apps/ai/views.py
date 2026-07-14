@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import uuid
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -156,8 +157,16 @@ class ReviewSummaryView(APIView):
     def post(self, request):
         product_id = request.data.get("product_id")
         
+        is_valid_uuid = False
+        if product_id:
+            try:
+                uuid.UUID(str(product_id))
+                is_valid_uuid = True
+            except ValueError:
+                pass
+
         # Try fetching reviews from DB
-        reviews_query = Review.objects.filter(product_id=product_id) if product_id else []
+        reviews_query = Review.objects.filter(product_id=product_id) if is_valid_uuid else []
         review_comments = [r.comment for r in reviews_query if r.comment]
 
         # If empty, use realistic mock reviews for demonstration
@@ -276,7 +285,15 @@ class ProductRecommendationView(APIView):
 
         # Current product details
         current_product = {"id": "prod-x", "name": "Wireless ANC Headphones Pro", "category": "Electronics", "price": 129.99}
+        is_valid_uuid = False
         if product_id:
+            try:
+                uuid.UUID(str(product_id))
+                is_valid_uuid = True
+            except ValueError:
+                pass
+
+        if is_valid_uuid:
             db_p = Product.objects.filter(id=product_id).first()
             if db_p:
                 current_product = {
