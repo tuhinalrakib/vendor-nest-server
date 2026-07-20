@@ -186,11 +186,15 @@ class Order(BaseModel):
                         image_url = "https://placehold.co/80x80/f4f4f5/71717a?text=Product"
                         if item.product.image:
                             try:
-                                url = item.product.image.url
-                                if url.startswith("http"):
-                                    image_url = url
+                                image_name = item.product.image.name
+                                if isinstance(image_name, str) and image_name.startswith(('http://', 'https://')):
+                                    image_url = image_name
                                 else:
-                                    image_url = f"{backend_url.rstrip('/')}{url}"
+                                    url = item.product.image.url
+                                    if url.startswith(('http://', 'https://')):
+                                        image_url = url
+                                    else:
+                                        image_url = f"{backend_url.rstrip('/')}{url}"
                             except ValueError:
                                 pass
                         

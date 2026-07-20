@@ -8,13 +8,33 @@ class OrderItemSerializer(serializers.ModelSerializer):
     is_digital = serializers.BooleanField(source='product.is_digital', read_only=True)
     digital_file_url = serializers.SerializerMethodField()
     license_key = serializers.SerializerMethodField()
+    product_image = serializers.SerializerMethodField()
 
     class Meta:
         model = OrderItem
         fields = [
             'id', 'product', 'product_name', 'seller_shop', 'quantity', 'price',
-            'is_digital', 'digital_file_url', 'license_key'
+            'is_digital', 'digital_file_url', 'license_key', 'product_image'
         ]
+
+    def get_product_image(self, obj):
+        if obj.product and obj.product.image:
+            image = obj.product.image
+            if isinstance(image.name, str) and image.name.startswith(('http://', 'https://')):
+                return image.name
+            try:
+                url = image.url
+                if url.startswith(('http://', 'https://')):
+                    return url
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(url)
+                from django.conf import settings
+                backend_url = getattr(settings, 'BACKEND_URL', 'http://127.0.0.1:8000')
+                return f"{backend_url.rstrip('/')}{url}"
+            except ValueError:
+                return None
+        return None
 
     def get_digital_file_url(self, obj):
         if obj.product and obj.product.is_digital:
