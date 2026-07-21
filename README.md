@@ -198,12 +198,11 @@ The server will run at: `http://127.0.0.1:8000/`
 
 ---
 
-## 📚 API Documentation (Swagger & ReDoc)
+## 📚 API Documentation (Swagger)
 
 Interactive API documentation is generated automatically. Access it when the server is running:
 
-- **Swagger UI**: [http://127.0.0.1:8000/swagger/](http://127.0.0.1:8000/swagger/)
-- **ReDoc UI**: [http://127.0.0.1:8000/redoc/](http://127.0.0.1:8000/redoc/)
+- **Swagger UI**: [https://vendor-nest-server.onrender.com/swagger/](https://vendor-nest-server.onrender.com/swagger/)
 
 ---
 
