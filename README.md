@@ -98,6 +98,9 @@ vendor-nest-server/
 │   └── celery.py         # Celery task queue configuration
 ├── services/          # External integrations (Cloudinary, AI, Wise, etc.)
 ├── build.sh           # Automated deployment script for Render
+├── Dockerfile         # Production Docker container image definition
+├── docker-compose.yml # Multi-container Docker orchestration (DB, Redis, Django, Celery)
+├── .env.docker.example # Environment variable template for Docker deployment
 ├── manage.py          # Django Administrative CLI
 ├── requirements.txt   # Python Dependencies
 └── README.md          # Project Documentation

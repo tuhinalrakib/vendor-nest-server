@@ -1,0 +1,13 @@
+.git
+.gitignore
+.env
+.venv
+vendor_nest_env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+db.sqlite3
+.pytest_cache
+staticfiles
+media/
