@@ -25,8 +25,8 @@ RUN pip install --upgrade pip && \
 # Copy project files
 COPY . /app/
 
-# Make entrypoint script executable
-RUN chmod +x /app/entrypoint.sh
+# Convert line endings (CRLF to LF) & make entrypoint script executable
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # Expose port 8000
 EXPOSE 8000

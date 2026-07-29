@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / '.env')
 
+SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY', 'django-insecure-docker-vendornest-secret-key-2026')
+
 # Add 'apps' directory to Python path so custom apps can be imported directly
 sys.path.insert(0, str(BASE_DIR / 'apps'))
 
@@ -228,33 +230,16 @@ SWAGGER_SETTINGS = {
 }
 
 # ==============================================================================
-# SMTP Email Configurations (Commented out - Uncomment to use on VPS / local SMTP)
+# SMTP Email Configuration (Gmail SMTP)
 # ==============================================================================
-# EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-# EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-# EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-# EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
-# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-# EMAIL_TIMEOUT = 10
-# ==============================================================================
-
-# ==============================================================================
-# Third-Party API Email Configurations (Active - Auto-routing)
-# ==============================================================================
-RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
-BREVO_API_KEY = os.getenv('BREVO_API_KEY', '')
-
-if BREVO_API_KEY:
-    EMAIL_BACKEND = 'core.email_backends.BrevoEmailBackend'
-    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'eng.tuhin77@gmail.com')
-elif RESEND_API_KEY:
-    EMAIL_BACKEND = 'core.email_backends.ResendEmailBackend'
-    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'onboarding@resend.dev')
-else:
-    # Fallback to local console for development
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@vendornest.com')
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'eng.tuhin77@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'yhfcmcefypwxschm')
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 # ==============================================================================
 
 
