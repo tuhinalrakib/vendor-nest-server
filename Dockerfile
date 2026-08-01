@@ -36,4 +36,4 @@ EXPOSE 8000
 ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
 
 # Default command: Gunicorn server
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

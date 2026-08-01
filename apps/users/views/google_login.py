@@ -35,8 +35,9 @@ class GoogleLoginView(APIView):
             response = requests.get(google_verify_url, timeout=10)
             
             if response.status_code != 200:
+                err_detail = response.json().get('error_description', response.text) if response.content else 'Invalid Google credential'
                 return Response(
-                    {"error": "Invalid Google credential"},
+                    {"error": f"Invalid Google credential: {err_detail}"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 

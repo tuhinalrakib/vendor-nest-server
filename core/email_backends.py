@@ -98,10 +98,11 @@ class BrevoEmailBackend(BaseEmailBackend):
         for message in email_messages:
             try:
                 # Brevo API format
+                sender_email = message.from_email or getattr(settings, 'DEFAULT_FROM_EMAIL', 'eng.tuhin77@gmail.com')
                 payload = {
                     "sender": {
                         "name": "VendorNest",
-                        "email": message.from_email
+                        "email": sender_email
                     },
                     "to": [{"email": r} for r in message.to],
                     "subject": message.subject,
@@ -135,4 +136,38 @@ class BrevoEmailBackend(BaseEmailBackend):
                 if not self.fail_silently:
                     raise
         return sent_count
+
+
+class FallbackEmailBackend(BaseEmailBackend):
+    """
+    Smart Email Backend with Automatic Fallback:
+    1. First attempts to send email via Gmail SMTP (Primary Backend).
+    2. If SMTP fails (e.g. Render cloud blocking port 587/SMTP), automatically
+       falls back to sending via Brevo HTTP API (Port 443 HTTPS).
+    """
+    def __init__(self, fail_silently=False, **kwargs):
+        super().__init__(fail_silently=fail_silently, **kwargs)
+        from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
+        self.primary_backend = SmtpBackend(fail_silently=False, **kwargs)
+        self.fallback_backend = BrevoEmailBackend(fail_silently=fail_silently, **kwargs)
+
+    def send_messages(self, email_messages):
+        if not email_messages:
+            return 0
+        try:
+            sent = self.primary_backend.send_messages(email_messages)
+            if sent > 0:
+                return sent
+            logger.warning("Primary SMTP backend returned 0 emails sent. Attempting fallback to Brevo...")
+        except Exception as e:
+            logger.warning(f"Primary email backend (Gmail SMTP) failed: {e}. Falling back to Brevo API...")
+
+        try:
+            return self.fallback_backend.send_messages(email_messages)
+        except Exception as fallback_err:
+            logger.error(f"Fallback email backend (Brevo) also failed: {fallback_err}")
+            if not self.fail_silently:
+                raise fallback_err
+            return 0
+
 

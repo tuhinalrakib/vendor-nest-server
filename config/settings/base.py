@@ -52,10 +52,10 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    "corsheaders.middleware.CorsMiddleware",   
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware',
@@ -200,9 +200,13 @@ else:
         }
     }
 
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8080",
+    "http://127.0.0.1:3000",
     "http://127.0.0.1:9000",
     "https://vendor-nest.vercel.app",
 ]
@@ -245,16 +249,32 @@ SWAGGER_SETTINGS = {
 }
 
 # ==============================================================================
-# SMTP Email Configuration (Gmail SMTP)
+# SMTP Email Configuration (Gmail SMTP / Custom SMTP)
 # ==============================================================================
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
+# Force IPv4 socket resolution on Render/Cloud to fix "[Errno 101] Network is unreachable" for Gmail SMTP
+import socket
+_old_getaddrinfo = socket.getaddrinfo
+
+def _ipv4_only_getaddrinfo(*args, **kwargs):
+    responses = _old_getaddrinfo(*args, **kwargs)
+    ipv4_responses = [r for r in responses if r[0] == socket.AF_INET]
+    return ipv4_responses if ipv4_responses else responses
+
+socket.getaddrinfo = _ipv4_only_getaddrinfo
+
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'core.email_backends.FallbackEmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1')
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() in ('true', '1')
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'eng.tuhin77@gmail.com')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'yhfcmcefypwxschm')
 EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+# API Keys for Brevo and Resend Email Fallback Backends
+BREVO_API_KEY = os.getenv('BREVO_API_KEY')
+RESEND_API_KEY = os.getenv('RESEND_API_KEY')
 # ==============================================================================
 
 
