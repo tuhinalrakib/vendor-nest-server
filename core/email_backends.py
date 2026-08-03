@@ -93,8 +93,13 @@ class BrevoEmailBackend(BaseEmailBackend):
         headers = {
             "api-key": self.api_key,
             "Content-Type": "application/json",
-            "accept": "application/json"
+            "accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) VendorNest/1.0"
         }
+
+        # Create persistent session to avoid TLS handshake EOF errors
+        session = requests.Session()
+        session.headers.update(headers)
 
         for message in email_messages:
             try:
@@ -122,8 +127,8 @@ class BrevoEmailBackend(BaseEmailBackend):
                     else:
                         payload["textContent"] = message.body
 
-                # Send POST request to Brevo API
-                response = requests.post(self.api_url, json=payload, headers=headers, timeout=10)
+                # Send POST request to Brevo API using persistent session
+                response = session.post(self.api_url, json=payload, timeout=10)
                 
                 if response.status_code in [200, 201, 202]:
                     sent_count += 1
@@ -141,34 +146,54 @@ class BrevoEmailBackend(BaseEmailBackend):
 
 class FallbackEmailBackend(BaseEmailBackend):
     """
-    Smart Email Backend with Automatic Fallback:
-    1. First attempts to send email via Gmail SMTP (Primary Backend).
-    2. If SMTP fails (e.g. Render cloud blocking port 587/SMTP), automatically
-       falls back to sending via Brevo HTTP API (Port 443 HTTPS).
+    Smart Email Backend with Automatic Fallback Chain:
+    1. Brevo HTTP API
+    2. Resend HTTP API
+    3. Gmail SMTP
     """
     def __init__(self, fail_silently=False, **kwargs):
         super().__init__(fail_silently=fail_silently, **kwargs)
         from django.core.mail.backends.smtp import EmailBackend as SmtpBackend
-        self.primary_backend = SmtpBackend(fail_silently=False, **kwargs)
-        self.fallback_backend = BrevoEmailBackend(fail_silently=fail_silently, **kwargs)
+        self.brevo_backend = BrevoEmailBackend(fail_silently=True, **kwargs)
+        self.resend_backend = ResendEmailBackend(fail_silently=True, **kwargs)
+        self.smtp_backend = SmtpBackend(fail_silently=True, **kwargs)
 
     def send_messages(self, email_messages):
         if not email_messages:
             return 0
+
+        # Try 1: Brevo HTTP API
         try:
-            sent = self.primary_backend.send_messages(email_messages)
+            sent = self.brevo_backend.send_messages(email_messages)
             if sent > 0:
                 return sent
-            logger.warning("Primary SMTP backend returned 0 emails sent. Attempting fallback to Brevo...")
         except Exception as e:
-            logger.warning(f"Primary email backend (Gmail SMTP) failed: {e}. Falling back to Brevo API...")
+            logger.warning(f"Brevo API failed: {e}. Trying Resend API...")
 
+        # Try 2: Resend HTTP API
         try:
-            return self.fallback_backend.send_messages(email_messages)
-        except Exception as fallback_err:
-            logger.error(f"Fallback email backend (Brevo) also failed: {fallback_err}")
-            if not self.fail_silently:
-                raise fallback_err
-            return 0
+            sent = self.resend_backend.send_messages(email_messages)
+            if sent > 0:
+                return sent
+        except Exception as e:
+            logger.warning(f"Resend API failed: {e}. Trying SMTP...")
+
+        # Try 3: SMTP
+        try:
+            sent = self.smtp_backend.send_messages(email_messages)
+            if sent > 0:
+                return sent
+        except Exception as e:
+            logger.warning(f"SMTP failed: {e}")
+
+        # Fallback logging if debug mode
+        if getattr(settings, 'DEBUG', False):
+            for msg in email_messages:
+                logger.info(f"[DEV EMAIL LOG] Subject: {msg.subject} | Body: {msg.body}")
+            return len(email_messages)
+
+        if not self.fail_silently:
+            raise RuntimeError("All configured email backends (Brevo, Resend, SMTP) failed to send email.")
+        return 0
 
 

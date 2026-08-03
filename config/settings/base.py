@@ -19,6 +19,9 @@ SECRET_KEY = os.getenv('SECRET_KEY') or os.getenv('DJANGO_SECRET_KEY', 'django-i
 # Add 'apps' directory to Python path so custom apps can be imported directly
 sys.path.insert(0, str(BASE_DIR / 'apps'))
 
+# Debug setting
+DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,6 +65,14 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if DEBUG:
+    try:
+        import debug_toolbar
+        INSTALLED_APPS.append("debug_toolbar")
+        MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+    except ImportError:
+        pass
 
 ROOT_URLCONF = 'config.urls'
 
@@ -166,6 +177,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
 DB_HOST = os.getenv('DB_HOST')
+
+# If DATABASE_URL points to an unresolvable Render host (dpg-...) and DB_HOST (Neon DB) is provided, fallback to DB_HOST
+if DATABASE_URL and 'dpg-' in DATABASE_URL and DB_HOST:
+    DATABASE_URL = None
 
 if DATABASE_URL:
     db_ssl = os.getenv('DB_SSL_REQUIRE', 'False').lower() in ('true', '1')

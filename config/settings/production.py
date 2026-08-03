@@ -16,6 +16,11 @@ else:
 
 # Configure database using DATABASE_URL environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
+DB_HOST = os.environ.get('DB_HOST')
+
+if DATABASE_URL and 'dpg-' in DATABASE_URL and DB_HOST:
+    DATABASE_URL = None
+
 if DATABASE_URL:
     db_ssl = os.environ.get('DB_SSL_REQUIRE', 'False').lower() in ('true', '1')
     DATABASES = {
@@ -25,6 +30,26 @@ if DATABASE_URL:
             ssl_require=db_ssl
         )
     }
+elif DB_HOST:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'postgres'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD'),
+            'HOST': DB_HOST,
+            'PORT': os.environ.get('DB_PORT', '5432'),
+            'OPTIONS': {
+                'sslmode': 'require',
+            },
+        }
+    }
+
+# Ensure debug_toolbar is disabled when DEBUG is False
+if not DEBUG:
+    if "debug_toolbar" in INSTALLED_APPS:
+        INSTALLED_APPS.remove("debug_toolbar")
+    MIDDLEWARE = [m for m in MIDDLEWARE if m != "debug_toolbar.middleware.DebugToolbarMiddleware"]
 
 # CORS Configuration
 CORS_ALLOW_CREDENTIALS = True

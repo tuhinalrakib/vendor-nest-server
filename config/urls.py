@@ -42,9 +42,10 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    try:
-        from debug_toolbar.toolbar import debug_toolbar_urls
-        urlpatterns += debug_toolbar_urls()
-    except ImportError:
-        pass
+    if "debug_toolbar" in settings.INSTALLED_APPS:
+        try:
+            from debug_toolbar.toolbar import debug_toolbar_urls
+            urlpatterns += debug_toolbar_urls()
+        except Exception:
+            pass
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
