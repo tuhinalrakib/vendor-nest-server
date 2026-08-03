@@ -28,8 +28,7 @@ if DATABASE_URL:
 
 # CORS Configuration
 CORS_ALLOW_CREDENTIALS = True
-if DEBUG:
-    CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = True
 
 cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS')
 if cors_origins:

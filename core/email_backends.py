@@ -75,7 +75,8 @@ class BrevoEmailBackend(BaseEmailBackend):
     """
     def __init__(self, fail_silently=False, **kwargs):
         super().__init__(fail_silently=fail_silently, **kwargs)
-        self.api_key = getattr(settings, 'BREVO_API_KEY', None)
+        import os
+        self.api_key = getattr(settings, 'BREVO_API_KEY', None) or os.getenv('BREVO_API_KEY')
         self.api_url = "https://api.brevo.com/v3/smtp/email"
 
     def send_messages(self, email_messages):

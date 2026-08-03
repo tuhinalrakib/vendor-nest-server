@@ -32,7 +32,6 @@ INSTALLED_APPS = [
     "corsheaders",
     'drf_yasg',
     'rest_framework_simplejwt.token_blacklist',
-    "debug_toolbar",
 
     # Custom Apps
     'core',
@@ -58,7 +57,6 @@ MIDDLEWARE = [
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'core.middleware.MaintenanceModeMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -249,20 +247,9 @@ SWAGGER_SETTINGS = {
 }
 
 # ==============================================================================
-# SMTP Email Configuration (Gmail SMTP / Custom SMTP)
+# SMTP Email Configuration (Gmail SMTP / Custom SMTP / Brevo API)
 # ==============================================================================
-# Force IPv4 socket resolution on Render/Cloud to fix "[Errno 101] Network is unreachable" for Gmail SMTP
-import socket
-_old_getaddrinfo = socket.getaddrinfo
-
-def _ipv4_only_getaddrinfo(*args, **kwargs):
-    responses = _old_getaddrinfo(*args, **kwargs)
-    ipv4_responses = [r for r in responses if r[0] == socket.AF_INET]
-    return ipv4_responses if ipv4_responses else responses
-
-socket.getaddrinfo = _ipv4_only_getaddrinfo
-
-EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'core.email_backends.FallbackEmailBackend')
+EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'core.email_backends.BrevoEmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
 EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
 EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1')
