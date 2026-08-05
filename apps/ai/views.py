@@ -518,3 +518,56 @@ class StoreDescriptionView(APIView):
                     "error": "Gemini Free Tier limit reached: আপনার Gemini API Key-তে আজকের দৈনিক কোটা লিমিট (Quota Limit) শেষ হয়ে যাওয়ার কারণে আসল AI এখন নতুন করে ডেসক্রিপশন জেনারেট করতে পারছে না।"
                 }, status=status.HTTP_429_TOO_MANY_REQUESTS)
             return Response({"error": f"AI Generation Failed: {err_msg}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+import urllib.request
+import urllib.parse
+
+class TranslateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        text = request.data.get("text", "").strip()
+        target_lang = request.data.get("target_lang", "bn")
+
+        if not text:
+            return Response({"translated_text": ""})
+
+        # 1. Try Gemini AI Translation first
+        if has_gemini and api_key:
+            try:
+                prompt = (
+                    f"Translate the following product text to natural, accurate, fluent Bengali (বাংলা):\n\n"
+                    f"{text}\n\n"
+                    f"Return ONLY the plain translated text without quotes or markdown formatting."
+                )
+                try:
+                    model = genai.GenerativeModel("gemini-3.5-flash")
+                    response = model.generate_content(prompt)
+                except Exception:
+                    try:
+                        model = genai.GenerativeModel("gemini-2.5-flash")
+                        response = model.generate_content(prompt)
+                    except Exception:
+                        model = genai.GenerativeModel("gemini-flash-latest")
+                        response = model.generate_content(prompt)
+                
+                translated = response.text.strip()
+                if translated:
+                    return Response({"translated_text": translated, "source": "gemini"})
+            except Exception as e:
+                print(f"Gemini translation failed, falling back to Google Translate: {e}")
+
+        # 2. Fallback to free Google Translate API
+        try:
+            url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={target_lang}&dt=t&q={urllib.parse.quote(text)}"
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                res_data = json.loads(resp.read().decode('utf-8'))
+                translated_parts = [item[0] for item in res_data[0] if item[0]]
+                translated_text = "".join(translated_parts).strip()
+                return Response({"translated_text": translated_text, "source": "google_gtx"})
+        except Exception as e:
+            print(f"Fallback translation error: {e}")
+            return Response({"translated_text": text, "source": "original"})
+
