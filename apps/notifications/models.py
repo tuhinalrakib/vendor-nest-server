@@ -9,6 +9,7 @@ class Notification(BaseModel):
     NOTIFICATION_TYPES = [
         ('seller_application', 'New Seller Application'),
         ('payout_request', 'New Payout Request'),
+        ('product_submission', 'New Product Submission'),
         ('system_alert', 'System Alert'),
         ('general', 'General Notification')
     ]

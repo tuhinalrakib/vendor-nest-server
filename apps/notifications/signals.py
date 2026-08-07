@@ -64,3 +64,57 @@ def create_payout_request_notification(sender, instance, created, **kwargs):
                 message=f"Shop '{instance.seller.shop_name}' requested a payout of ${instance.amount}.",
                 notification_type="payout_request"
             )
+
+from django.db import models
+from products.models import Product
+
+@receiver(pre_save, sender=Product)
+def store_original_product_status(sender, instance, **kwargs):
+    if instance.pk:
+        try:
+            original = Product.objects.get(pk=instance.pk)
+            instance._original_approval_status = original.approval_status
+        except Product.DoesNotExist:
+            instance._original_approval_status = None
+    else:
+        instance._original_approval_status = None
+
+@receiver(post_save, sender=Product)
+def create_product_submission_notification(sender, instance, created, **kwargs):
+    original_status = getattr(instance, "_original_approval_status", None)
+    
+    # 1. When product is submitted or status becomes 'pending', notify all admins
+    if (created and instance.approval_status == 'pending') or (not created and original_status != 'pending' and instance.approval_status == 'pending'):
+        shop_name = instance.seller.shop_name if (instance.seller and instance.seller.shop_name) else "A seller"
+        admins = User.objects.filter(
+            models.Q(role='admin') | models.Q(is_superuser=True) | models.Q(is_staff=True),
+            is_active=True
+        ).distinct()
+        for admin in admins:
+            Notification.objects.create(
+                recipient=admin,
+                title="New Product Submitted",
+                message=f"Shop '{shop_name}' submitted product '{instance.name}' for moderation approval.",
+                notification_type="product_submission"
+            )
+            
+    # 2. When admin approves a product, notify the seller
+    elif not created and original_status != 'approved' and instance.approval_status == 'approved':
+        if instance.seller and instance.seller.user:
+            Notification.objects.create(
+                recipient=instance.seller.user,
+                title="Product Approved",
+                message=f"Your product '{instance.name}' has been approved by admin and is now live!",
+                notification_type="general"
+            )
+
+    # 3. When admin rejects a product, notify the seller
+    elif not created and original_status != 'rejected' and instance.approval_status == 'rejected':
+        if instance.seller and instance.seller.user:
+            Notification.objects.create(
+                recipient=instance.seller.user,
+                title="Product Rejected / Flagged",
+                message=f"Your product '{instance.name}' was rejected/flagged during moderation.",
+                notification_type="general"
+            )
+

@@ -37,7 +37,7 @@ class Product(BaseModel):
     license_keys = models.TextField(blank=True, null=True, help_text="New-line separated pre-generated keys")
 
     # Workflow & Publishing Fields
-    approval_status = models.CharField(max_length=20, choices=APPROVAL_CHOICES, default='approved')
+    approval_status = models.CharField(max_length=20, choices=APPROVAL_CHOICES, default='pending')
     publish_at = models.DateTimeField(null=True, blank=True)
 
     # Translation Fields

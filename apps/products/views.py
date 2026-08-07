@@ -57,13 +57,13 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         user = request.user
         if not user or not user.is_authenticated:
-            base_key = 'products_list_all'
+            base_key = 'products_list_public'
         elif user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
-            base_key = 'products_list_all'
+            base_key = f'products_list_admin_{user.id}'
         elif hasattr(user, 'role') and user.role == 'seller':
             base_key = f'products_list_seller_{user.id}'
         else:
-            base_key = 'products_list_all'
+            base_key = 'products_list_public'
 
         # Hash query parameters to prevent key collisions for different filters
         query_params = dict(request.query_params.items())
@@ -134,7 +134,12 @@ class ProductViewSet(viewsets.ModelViewSet):
                     raise ValidationError(
                         {"detail": "Product listing limit reached. You can list up to 15 products on the Starter plan. Please upgrade your plan in settings."}
                     )
-        super().perform_create(serializer)
+            serializer.save(seller=seller_profile, approval_status='pending')
+        elif is_admin:
+            serializer.save(approval_status='approved')
+        else:
+            serializer.save()
+
         from .signals import invalidate_product_cache
         invalidate_product_cache(sender=Product, instance=serializer.instance)
 
@@ -181,6 +186,23 @@ class ProductViewSet(viewsets.ModelViewSet):
         from .signals import invalidate_product_cache
         invalidate_product_cache(sender=Product, instance=product)
         return Response({"message": "Product rejected successfully.", "status": "rejected"})
+
+    # 2.5 Product Approval Workflow: Set Pending
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def set_pending(self, request, pk=None):
+        user = request.user
+        is_admin = user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')
+        if not is_admin:
+            return Response({"error": "Only administrators can change status."}, status=status.HTTP_403_FORBIDDEN)
+            
+        product = self.get_object()
+        product.approval_status = 'pending'
+        product._changed_by = user
+        product.save()
+        
+        from .signals import invalidate_product_cache
+        invalidate_product_cache(sender=Product, instance=product)
+        return Response({"message": "Product status set to pending moderation.", "status": "pending"})
 
     # 3. Product Version History Log Viewer
     @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticated])
