@@ -40,6 +40,7 @@ class UserAuthAPITest(TestCase):
             "email": "newuser@example.com",
             "password": "StrongPassword123!",
             "password_confirm": "StrongPassword123!",
+            "full_name": "New User",
             "first_name": "New",
             "last_name": "User"
         }

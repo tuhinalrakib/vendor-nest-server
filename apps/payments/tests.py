@@ -52,21 +52,21 @@ class SSLCommerzCallbackViewTest(TestCase):
 
 class WiseSandboxClientTest(TestCase):
     def test_create_recipient_fallback(self):
-        with patch('apps.payments.gateways.wise_client.WISE_API_TOKEN', None):
+        with patch('payments.gateways.wise_client.WISE_API_TOKEN', None):
             res = WiseSandboxClient.create_recipient("Jane Doe", "jane@example.com")
             self.assertTrue(res["id"].startswith("rec_sim_"))
             self.assertEqual(res["name"], "Jane Doe")
             self.assertEqual(res["details"], "jane@example.com")
 
     def test_create_quote_fallback(self):
-        with patch('apps.payments.gateways.wise_client.WISE_API_TOKEN', None):
+        with patch('payments.gateways.wise_client.WISE_API_TOKEN', None):
             res = WiseSandboxClient.create_quote("USD", "EUR", "100.00")
             self.assertTrue(res["id"].startswith("qte_sim_"))
             self.assertEqual(res["source"], "USD")
             self.assertEqual(res["target"], "EUR")
 
     def test_create_transfer_fallback(self):
-        with patch('apps.payments.gateways.wise_client.WISE_API_TOKEN', None):
+        with patch('payments.gateways.wise_client.WISE_API_TOKEN', None):
             res = WiseSandboxClient.create_transfer("rec_123", "qte_123", "Payout_Ref")
             self.assertTrue(res["id"].startswith("trf_sim_"))
             self.assertEqual(res["status"], "processing")

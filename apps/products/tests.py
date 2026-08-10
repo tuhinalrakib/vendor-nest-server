@@ -2,6 +2,7 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from categories.models import Category
 from seller.models import SellerProfile
 from products.models import Product
@@ -12,6 +13,7 @@ class ProductAPITest(TestCase):
     """Test suite for Product model and API endpoints."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.user = User.objects.create_user(
             email="seller@example.com",
@@ -20,7 +22,8 @@ class ProductAPITest(TestCase):
         self.seller = SellerProfile.objects.create(
             user=self.user,
             shop_name="Tech Store",
-            subdomain="tech-store"
+            subdomain="tech-store",
+            status="approved"
         )
         self.category = Category.objects.create(
             name="Gadgets",

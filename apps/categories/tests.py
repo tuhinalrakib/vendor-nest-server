@@ -1,12 +1,14 @@
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
+from django.core.cache import cache
 from categories.models import Category
 
 class CategoryAPITest(TestCase):
     """Test suite for Category model and API endpoints."""
 
     def setUp(self):
+        cache.clear()
         self.client = APIClient()
         self.category = Category.objects.create(
             name="Electronics",

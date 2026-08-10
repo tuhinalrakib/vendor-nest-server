@@ -45,4 +45,4 @@ jobs:
           DEBUG: 'True'
           DJANGO_SETTINGS_MODULE: 'config.settings.local'
         run: |
-          python manage.py test users categories products
+          python manage.py test users categories products payments
