@@ -11,3 +11,8 @@ ALLOWED_HOSTS = ['*']
 INTERNAL_IPS = [
     "127.0.0.1",
 ]
+
+# Use in-memory email backend for testing/local development if Brevo API key is not present
+if not os.getenv('BREVO_API_KEY'):
+    EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
+

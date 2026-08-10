@@ -17,9 +17,7 @@ class ResendEmailBackend(BaseEmailBackend):
             return 0
         
         if not self.api_key:
-            if not self.fail_silently:
-                raise ValueError("RESEND_API_KEY is not set in Django settings.")
-            logger.error("RESEND_API_KEY is missing. Cannot send email.")
+            logger.warning("RESEND_API_KEY is missing. Skipping email dispatch via Resend.")
             return 0
 
         sent_count = 0
@@ -84,9 +82,7 @@ class BrevoEmailBackend(BaseEmailBackend):
             return 0
         
         if not self.api_key:
-            if not self.fail_silently:
-                raise ValueError("BREVO_API_KEY is not set in Django settings.")
-            logger.error("BREVO_API_KEY is missing. Cannot send email.")
+            logger.warning("BREVO_API_KEY is missing. Skipping email dispatch via Brevo.")
             return 0
 
         sent_count = 0
