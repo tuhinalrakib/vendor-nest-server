@@ -191,25 +191,18 @@ if DATABASE_URL:
             ssl_require=db_ssl
         )
     }
-elif DB_HOST:
+else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': os.getenv('DB_NAME', 'postgres'),
-            'USER': os.getenv('DB_USER', 'postgres'),
+            'NAME': os.getenv('DB_NAME', 'neondb'),
+            'USER': os.getenv('DB_USER', 'neondb_owner'),
             'PASSWORD': os.getenv('DB_PASSWORD'),
-            'HOST': DB_HOST,
+            'HOST': DB_HOST or 'ep-late-shape-ao12ffaz-pooler.c-2.ap-southeast-1.aws.neon.tech',
             'PORT': os.getenv('DB_PORT', '5432'),
             'OPTIONS': {
                 'sslmode': 'require',
             },
-        }
-    }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 

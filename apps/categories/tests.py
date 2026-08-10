@@ -1,3 +1,4 @@
+from typing import Any
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -24,9 +25,11 @@ class CategoryAPITest(TestCase):
     def test_category_list_api(self):
         response = self.client.get("/api/categories/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(response.data), 1)
+        data: Any = getattr(response, "data", [])
+        self.assertGreaterEqual(len(data), 1)
 
     def test_category_detail_api(self):
         response = self.client.get(f"/api/categories/{self.category.id}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["name"], "Electronics")
+        data: Any = getattr(response, "data", {})
+        self.assertEqual(data["name"], "Electronics")

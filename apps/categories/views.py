@@ -23,7 +23,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     lookup_field = 'id'
     def list(self, request, *args, **kwargs):
         cached_data = cache.get(CACHE_KEY_CATEGORIES_LIST)
-        if cached_data is not None:
+        if cached_data:
             return Response(cached_data)
 
         queryset = self.filter_queryset(self.get_queryset())

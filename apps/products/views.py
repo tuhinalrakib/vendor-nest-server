@@ -56,11 +56,12 @@ class ProductViewSet(viewsets.ModelViewSet):
         import json
 
         user = request.user
-        if not user or not user.is_authenticated:
-            base_key = 'products_list_public'
-        elif user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin'):
+        is_admin_request = request.query_params.get('admin') == 'true'
+        is_seller_request = request.query_params.get('mine') == 'true' or request.query_params.get('seller') == 'me'
+
+        if is_admin_request and user and user.is_authenticated and (user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')):
             base_key = f'products_list_admin_{user.id}'
-        elif hasattr(user, 'role') and user.role == 'seller':
+        elif is_seller_request and user and user.is_authenticated and hasattr(user, 'role') and user.role == 'seller':
             base_key = f'products_list_seller_{user.id}'
         else:
             base_key = 'products_list_public'
@@ -79,7 +80,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         cache_key = self.get_list_cache_key(request)
         cached_data = cache.get(cache_key)
-        if cached_data is not None:
+        if cached_data:
             return Response(cached_data)
 
         queryset = self.filter_queryset(self.get_queryset())
@@ -105,18 +106,21 @@ class ProductViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Product.objects.select_related('seller', 'category', 'seller__user')
         
-        # Admin / Superuser see all products
-        if user and user.is_authenticated and (user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')):
+        mine_param = self.request.query_params.get('mine')
+        seller_param = self.request.query_params.get('seller')
+        admin_param = self.request.query_params.get('admin')
+
+        # 1. Admin Management Panel: Return all products (Pending, Approved, Rejected)
+        if admin_param == 'true' and user and user.is_authenticated and (user.is_staff or user.is_superuser or (hasattr(user, 'role') and user.role == 'admin')):
             return queryset.all()
-            
-        # Sellers see only their own products
-        if user and user.is_authenticated and hasattr(user, 'role') and user.role == 'seller':
+
+        # 2. Seller Portal Management: Return only seller's own inventory
+        if (mine_param == 'true' or seller_param == 'me') and user and user.is_authenticated and hasattr(user, 'role') and user.role == 'seller':
             return queryset.filter(seller__user=user)
-            
-        # Visitors / Customers see approved seller's approved and published products
+
+        # 3. Public Marketplace Catalog (used by /products for ALL visitors, customers, sellers, admins):
         now = timezone.now()
         return queryset.filter(
-            seller__status="approved",
             approval_status="approved"
         ).filter(
             models.Q(publish_at__isnull=True) | models.Q(publish_at__lte=now)
