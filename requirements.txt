@@ -87,3 +87,5 @@ whitenoise==6.12.0
 yarl==1.24.2
 gunicorn
 dj-database-url
+pytest>=8.0.0
+pytest-django>=4.8.0

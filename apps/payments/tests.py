@@ -3,16 +3,16 @@ from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from unittest.mock import patch
-from apps.payments.models import Transaction
-from apps.orders.models import Order
-from apps.payments.gateways.wise_client import WiseSandboxClient
+from payments.models import Transaction
+from orders.models import Order
+from payments.gateways.wise_client import WiseSandboxClient
 
 User = get_user_model()
 
 class SSLCommerzCallbackViewTest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(username="testbuyer", password="password")
+        self.user = User.objects.create_user(email="testbuyer@example.com", password="password")
         self.order = Order.objects.create(
             buyer=self.user,
             total_amount="250.00",
