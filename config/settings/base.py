@@ -191,7 +191,7 @@ if DATABASE_URL:
             ssl_require=db_ssl
         )
     }
-else:
+elif os.getenv('DB_PASSWORD'):
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -203,6 +203,13 @@ else:
             'OPTIONS': {
                 'sslmode': 'require',
             },
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
 
