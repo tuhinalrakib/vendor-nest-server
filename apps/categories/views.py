@@ -49,15 +49,22 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         super().perform_create(serializer)
+        cache.delete(CACHE_KEY_CATEGORIES_LIST)
         from .signals import invalidate_categories_cache
         invalidate_categories_cache(sender=Category, instance=serializer.instance)
 
     def perform_update(self, serializer):
         super().perform_update(serializer)
+        cache.delete(CACHE_KEY_CATEGORIES_LIST)
+        if hasattr(serializer.instance, 'id'):
+            cache.delete(f"category_detail_{serializer.instance.id}")
         from .signals import invalidate_categories_cache
         invalidate_categories_cache(sender=Category, instance=serializer.instance)
 
     def perform_destroy(self, instance):
         super().perform_destroy(instance)
+        cache.delete(CACHE_KEY_CATEGORIES_LIST)
+        if hasattr(instance, 'id'):
+            cache.delete(f"category_detail_{instance.id}")
         from .signals import invalidate_categories_cache
         invalidate_categories_cache(sender=Category, instance=instance)

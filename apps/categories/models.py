@@ -5,8 +5,10 @@ from core.models import BaseModel
 class Category(BaseModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, unique=True)
+    name_bn = models.CharField(max_length=255, blank=True, null=True)
     slug = models.SlugField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
+    description_bn = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to="categories/", max_length=500, blank=True, null=True)
     parent = models.ForeignKey(
         "self",
