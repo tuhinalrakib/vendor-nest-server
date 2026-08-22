@@ -1,0 +1,15 @@
+.venv/
+vendor_nest_env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+media/
+db.sqlite3
+.git/
+.github/
+Dockerfile
+docker-compose.yml
+.dockerignore
+*.log

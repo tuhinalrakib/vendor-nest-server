@@ -10,9 +10,20 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() in ('true', '1')
 
 allowed_hosts_raw = os.environ.get('ALLOWED_HOSTS') or os.environ.get('DJANGO_ALLOWED_HOSTS')
 if allowed_hosts_raw and allowed_hosts_raw.strip() and allowed_hosts_raw != '*':
-    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_raw.split(',') if host.strip()] + ['*', '.onrender.com']
+    ALLOWED_HOSTS = [host.strip() for host in allowed_hosts_raw.split(',') if host.strip()] + ['*', '.onrender.com', '.vercel.app']
 else:
     ALLOWED_HOSTS = ['*']
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.vercel.app',
+    'https://*.onrender.com',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+]
+csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS')
+if csrf_origins:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in csrf_origins.split(',') if origin.strip()])
+
 
 # Configure database using DATABASE_URL environment variable
 DATABASE_URL = os.environ.get('DATABASE_URL')
